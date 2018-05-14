@@ -10,7 +10,7 @@ To clone this repo open your terminal and run:
 ## Pre-requisites
 
 Neuro-CNN runs on Python2 and Python3. In order to install all required packages we recommend creating an anaconda
-(https://www.anaconda.com/download/#linux) environment using the environment files. Open your terminal and run:
+(https://www.anaconda.com/download/) environment using the environment files. Open your terminal and run:
 
 For Anaconda2
 `conda env create -f environment.yml`
@@ -26,7 +26,8 @@ On Linux/MacOS:
 On Windows:
 `activate neurocnn`
 
-- add NEURON and (LFPy)
+The neural simulations rely on NEURON (https://www.neuron.yale.edu/neuron/) and LFPy. Once NEURON is installed, install LFPy (after activating the environment) by running `pip install LFPy`.
+
 
 ## Cell simulations:
 
