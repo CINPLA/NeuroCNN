@@ -1,0 +1,13 @@
+name: neurocnn
+dependencies:
+  - python=2.7
+  - pyyaml
+  - numpy
+  - scipy
+  - pip:
+    - matplotlib
+    - scikit-learn
+    - pandas 
+    - tensorflow
+    - ipython
+    - deap
