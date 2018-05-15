@@ -26,8 +26,13 @@ On Linux/MacOS:
 On Windows:
 `activate neurocnn`
 
-The neural simulations rely on NEURON (https://www.neuron.yale.edu/neuron/) and LFPy. Once NEURON is installed, install LFPy (after activating the environment) by running `pip install LFPy`.
+The neural simulations rely on NEURON (https://www.neuron.yale.edu/neuron/) and the latest version of LFPy. Once NEURON is installed, you can install LFPy (all requirements are installed in the environment):
 
+```
+git clone https://github.com/LFPy/LFPy
+cd LFPy
+python setup.py install
+```
 
 ## Cell simulations:
 
@@ -35,11 +40,11 @@ Cell models can be downloaded from the Neocortical Micro Circuit Portal https://
 (13 models from layer 5 for testing are already included).
 
 Newly downloaded models should be unzipped to the folder "cell_models/bbp/"
-Then you must run "python hbp_cells.py compile" to compile .mod files. This only has to be done once,
-if you do not add more models or manipulate the .mod files
-(if you find problems in compiling try to install: sudo apt-get install lib32ncurses5-dev)
+Then you must run `python hbp_cells.py compile` to compile .mod files. 
+This only has to be done once, if you do not add more models or manipulate the .mod files
+(if you find problems in compiling try to install: `sudo apt-get install lib32ncurses5-dev`)
 
-To run all L5 cell models you have downloaded, run "python do_all_cell_simulations.py"
+To run all L5 cell models you have downloaded, run `python do_all_cell_simulations.py`
 From the command line you can give arguments to customize your simulated data:
 
 - -rot -- 3d rotations to apply to the models befor computing EAPs (Norot-physrot-3drot)
