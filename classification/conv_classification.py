@@ -3,7 +3,7 @@
 Deep net to classify Excit and Inhib neurons from features extracted from signals
 
 '''
-
+from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
@@ -117,19 +117,19 @@ class SpikeConvNet:
 
         # AW (amp-width) - FW (FWHM - Width) - AF (amp-FWHM) - AFW (amp-FHWM-width) - 3d
         self.feat_type = feat_type
-        print 'Feature type: ', self.feat_type
+        print('Feature type: ', self.feat_type)
 
         self.val_type = val_type
         if train_cell_names:
             self.val_type = 'provided_datasets'
-        print 'Validation type: ', self.val_type
+        print('Validation type: ', self.val_type)
         if self.val_type == 'k-fold':
             self.kfolds = kfolds
 
         self.model_to_hold_out = model_out
 
         self.size = size
-        print 'Network size: ', self.size
+        print('Network size: ', self.size)
 
         # specify full path to dataset to be used containing simulated data from all cells
         if spike_folder is not None:
@@ -152,10 +152,10 @@ class SpikeConvNet:
             self.info = yaml.load(f)
 
         self.rotation_type = self.info['Location']['rotation']
-        print 'Rotation type: ', self.rotation_type
+        print('Rotation type: ', self.rotation_type)
         self.pitch = self.info['Electrodes']['pitch']
         self.electrode_name = self.info['Electrodes']['electrode_name']
-        print 'Electrode name: ', self.electrode_name
+        print('Electrode name: ', self.electrode_name)
         self.mea_dim = self.info['Electrodes']['dim']
         self.n_elec = np.prod(self.info['Electrodes']['dim'])
         self.n_points = self.info['Electrodes']['n_points']
@@ -163,22 +163,11 @@ class SpikeConvNet:
 
         self.binary_cat = ['EXCIT', 'INHIB']
 
-        if 'bbp' in self.spike_folder and 'hybrid' not in self.spike_folder:
+        if 'bbp' in self.spike_folder:
             self.all_categories = ['BP', 'BTC', 'ChC', 'DBC', 'LBC', 'MC', 'NBC',
                                    'NGC', 'SBC', 'STPC', 'TTPC1', 'TTPC2', 'UTPC']
             self.exc_categories = ['STPC', 'TTPC1', 'TTPC2', 'UTPC']
             self.inh_categories = ['BP', 'BTC', 'ChC', 'DBC', 'LBC', 'MC', 'NBC', 'NGC', 'SBC']
-
-        elif 'allen' in self.spike_folder and 'hybrid' not in self.spike_folder:
-            self.all_categories = ['spiny', 'aspiny']
-            self.exc_categories = ['spiny']
-            self.inh_categories = ['aspiny']
-
-        elif 'hybrid' in self.spike_folder:
-            self.all_categories = ['BP', 'BTC', 'ChC', 'DBC', 'LBC', 'MC', 'NBC',
-                                   'NGC', 'SBC', 'STPC', 'TTPC1', 'TTPC2', 'UTPC', 'spiny', 'aspiny']
-            self.exc_categories = ['STPC', 'TTPC1', 'TTPC2', 'UTPC', 'spiny']
-            self.inh_categories = ['BP', 'BTC', 'ChC', 'DBC', 'LBC', 'MC', 'NBC', 'NGC', 'SBC', 'aspiny']
 
         self.categories_by_type = {'EXCIT': self.exc_categories,
                                    'INHIB': self.inh_categories}
@@ -198,8 +187,8 @@ class SpikeConvNet:
                     
         self.threshold_detect = 5  # uV
 
-        self.all_etypes = ['cADpyr', 'cAC', 'bAC', 'cNAC', 'bNAC', 'dNAC', 'cSTUT', 'bSTUT', 'dSTUT', 'cIR', 'bIR',
-                           'model']
+        self.all_etypes = ['cADpyr', 'cAC', 'bAC', 'cNAC', 'bNAC', 'dNAC', 'cSTUT', 'bSTUT', 'dSTUT', 'cIR', 'bIR']
+
         if val_percent:
             self.val_percent = val_percent
         else:
@@ -207,10 +196,10 @@ class SpikeConvNet:
 
         if train_cell_names:
             self.train_cell_names = list(np.loadtxt(join(root_folder, 'classification', train_cell_names), dtype=str))
-            print 'cells from file used for training: ', self.train_cell_names
+            print('cells from file used for training: ', self.train_cell_names)
             if val_cell_names:
                 self.val_cell_names = list(np.loadtxt(join(root_folder, 'classification', val_cell_names), dtype=str))
-                print 'cells from file used for validation: ', self.val_cell_names
+                print('cells from file used for validation: ', self.val_cell_names)
             self.cell_names = self.train_cell_names + self.val_cell_names
         else:
             self.train_cell_names = None
@@ -223,11 +212,11 @@ class SpikeConvNet:
                 for ss in spikefiles:
                     split_ss = ss.split('_')
                     self.cell_names.append('_'.join(split_ss[3:-1]))
-                print 'all cells used for training: ', self.cell_names
+                print('all cells used for training: ', self.cell_names)
             else:
                 self.cell_names = list(np.loadtxt(join(root_folder, 'classification', cellnames), dtype=str))
                 np.random.shuffle(self.cell_names)
-                print 'cells from file used for training: ', self.cell_names
+                print('cells from file used for training: ', self.cell_names)
 
         self.dt = 2**-5
 
@@ -333,7 +322,7 @@ class SpikeConvNet:
 
             if self.validation_runs > 1:
                 for v in range(self.validation_runs):
-                    print 'Training/Validation run: ', v+1, '/', self.validation_runs
+                    print('Training/Validation run: ', v+1, '/', self.validation_runs)
                     self.training(validation_run=v)
                     self.evaluate(validation_run=v)
             else:
@@ -346,10 +335,10 @@ class SpikeConvNet:
             self.cat = np.squeeze(np.array(self.cat))
             self.guessed = np.squeeze(np.array(self.guessed))
 
-            print "Training done"
+            print("Training done")
             t_end = time.time()
             self.processing_time = t_end - t_start
-            print 'Training time: ', self.processing_time
+            print('Training time: ', self.processing_time)
 
             # final evaluation
             self.final_evaluate()
@@ -381,15 +370,13 @@ class SpikeConvNet:
             min_binary_occ = np.min(binary_occ)
             min_mtype_occ = np.min(occurrences)
 
-            print 'MIN BINARY OCCURRENCE: ', min_binary_occ
-            print 'MIN M-TYPE OCCURRENCE: ', min_mtype_occ
-
             if self.n_spikes is not 'all':
                 min_binary_occ = np.min(self.n_spikes,min_binary_occ)
                 min_mtype_occ = np.min(self.n_spikes,min_mtype_occ)
-                print 'Changed min_occurencies due to self.n_spikes'
-                print 'MIN BINARY OCCURRENCE: ', min_binary_occ
-                print 'MIN M-TYPE OCCURRENCE: ', min_mtype_occ
+                print('Changed min_occurencies due to self.n_spikes')
+
+            print('MIN BINARY OCCURRENCE: ', min_binary_occ)
+            print('MIN M-TYPE OCCURRENCE: ', min_mtype_occ)
 
             self.morph_ids = np.unique([int(f.split('_')[6]) for f in spikelist])
             self.num_morph = len(self.morph_ids)
@@ -397,7 +384,7 @@ class SpikeConvNet:
                 if self.num_morph > 1:
                     # self.model_out = np.random.randint(1, self.num_morph)
                     self.model_out = self.model_to_hold_out
-                    print 'Hold model out: ', self.model_out
+                    print('Hold model out: ', self.model_out)
                 else:
                     raise AttributeError('Hold-model-out can be run when more than one cell id is in the dataset')
 
@@ -414,7 +401,7 @@ class SpikeConvNet:
 
             for idx, cell in enumerate(categories):
                 avail_samples = sum([int(f.split('_')[2]) for f in spikelist if cell in f])
-                print idx+1, '/', len(categories), ' :', cell, ' avail: ', avail_samples
+                print(idx+1, '/', len(categories), ' :', cell, ' avail: ', avail_samples)
                 cells_to_load = [c for c in self.cell_names if cell in c]
 
                 ncells_inh = len([c for c in cells if c in self.inh_categories])
@@ -451,7 +438,6 @@ class SpikeConvNet:
                             cat = cat[idx_cells]
                             etype = etype[idx_cells]
                             morphid = morphid[idx_cells]
-                print cell, len(cat)
 
 
                 if len(cat) > 0:
@@ -522,9 +508,9 @@ class SpikeConvNet:
                 train_min_mtype_occ = np.min(self.n_spikes, train_min_mtype_occ)
                 val_min_binary_occ = np.min(self.n_spikes, val_min_binary_occ)
                 val_min_mtype_occ = np.min(self.n_spikes, val_min_mtype_occ)
-                print 'Changed min_occurencies due to self.n_spikes'
-            print 'MIN BINARY OCCURRENCE: train - ', train_min_binary_occ, ' val - ', val_min_binary_occ
-            print 'MIN M-TYPE OCCURRENCE: train - ', train_min_mtype_occ, ' val - ', val_min_mtype_occ
+                print('Changed min_occurencies due to self.n_spikes')
+            print('MIN BINARY OCCURRENCE: train - ', train_min_binary_occ, ' val - ', val_min_binary_occ)
+            print('MIN M-TYPE OCCURRENCE: train - ', train_min_mtype_occ, ' val - ', val_min_mtype_occ)
 
             # set up temporary directories
             self.tmp_data_dir = join(data_dir, 'classification',
@@ -635,8 +621,8 @@ class SpikeConvNet:
                 val_cells_to_load = [c for c in self.val_cell_names if '_' + cell + '_' in c]
                 val_spikes, val_loc, val_rot, val_cat, val_etype, val_morphid, loaded_cat = \
                     load_EAP_data(self.spike_folder, val_cells_to_load, categories)
-                print idx + 1, '/', len(categories), ' :', cell, ' avail train: ', train_avail_samples, \
-                    ' avail val: ', val_avail_samples
+                print(idx + 1, '/', len(categories), ' :', cell, ' avail train: ', train_avail_samples, \
+                    ' avail val: ', val_avail_samples)
 
                 ncells_inh = len([c for c in val_cells if c in self.inh_categories])
                 ncells_exc = len([c for c in val_cells if c in self.exc_categories])
@@ -708,7 +694,6 @@ class SpikeConvNet:
                     self.create_tmp_data(val_spikes, val_loc, val_rot, val_cat, val_etype, val_morphid,
                                          mcat=val_mcat, dset='validation')
 
-                print cell, n_train, n_val
 
     def return_features(self,spikes):
         ''' extract features from spikes
@@ -755,12 +740,12 @@ class SpikeConvNet:
             features = features.swapaxes(0, 1)
             features = features.swapaxes(1, 2)
         elif self.feat_type == '3d':
-            print 'Downsampling spikes...'
+            print('Downsampling spikes...')
             # downsampled_spikes = ss.resample(self.spikes, self.spikes.shape[2] // self.downsampling_factor, axis=2)
             downsampled_spikes = spikes[:,:,::int(self.downsampling_factor)]
             features = downsampled_spikes
             self.inputs = spikes.shape[2] // self.downsampling_factor
-            print 'Done'
+            print('Done')
 
         return features
 
@@ -844,7 +829,6 @@ class SpikeConvNet:
                         validation_mcat = mcat[val_idx]
                     validation_etype = etype[val_idx]
 
-                    # print train_loc.shape, train_spikes.shape, train_rot.shape, train_cat.shape, train_etype.shape
 
                     self.dump_learndata(tmp_train_dir,[train_loc,train_rot,train_cat,train_etype,train_feat])
                     self.dump_valdata(curr_eval_dir, validation_spikes, validation_feat, validation_loc,
@@ -1253,22 +1237,20 @@ class SpikeConvNet:
             for epoch in range(self.training_epochs):
                 if coord.should_stop():
                     break
-                # print 'first training...'
                 sess.run(train_step,feed_dict={self.keep_prob: self.dropout_rate})
-                # print 'done'
                 # Display logs per epoch step
                 if (epoch+1) % self.display_step == 0:
                     # ce,train_accuracy,summary = sess.run([cross_entropy,accuracy,merged],feed_dict={self.keep_prob: 1.0})
                     ce,train_accuracy,summary = sess.run([total_loss,accuracy,merged],feed_dict={self.keep_prob: 1.0})
-                    print "Step:", '%04d' % (epoch + 1), "training accuracy=", "{:.9f}".format(train_accuracy)
-                    print 'Elapsed time: ', time.time() - t_start
+                    print("Step:", '%04d' % (epoch + 1), "training accuracy=", "{:.9f}".format(train_accuracy))
+                    print('Elapsed time: ', time.time() - t_start)
                     train_writer.add_summary(summary,epoch)
                 if epoch+1 == self.training_epochs:
                     ce, train_accuracy, summary = sess.run([total_loss, accuracy, merged],
                                                            feed_dict={self.keep_prob: 1.0})
-                    print "Step:", '%04d' % (epoch + 1), "training accuracy=", "{:.9f}".format(train_accuracy)
+                    print("Step:", '%04d' % (epoch + 1), "training accuracy=", "{:.9f}".format(train_accuracy))
                     self.acc_tr = train_accuracy
-                    print 'Elapsed time: ', time.time() - t_start
+                    print('Elapsed time: ', time.time() - t_start)
                     # Save the model checkpoint periodically.
                     if self.save:
                         checkpoint_path = join(self.model_path, 'train','run%d' % validation_run ,self.model_name +'.ckpt')
@@ -1287,7 +1269,6 @@ class SpikeConvNet:
         print("Optimization Finished!")
         # training_cost = sess.run(cross_entropy,feed_dict={self.keep_prob: 1.0})
         training_cost = sess.run(total_loss,feed_dict={self.keep_prob: 1.0})
-        # print "Training cost (validation run ",validation_run, ") =", training_cost,'\n'
 
         tf.reset_default_graph()
         sess.close()
@@ -1349,7 +1330,7 @@ class SpikeConvNet:
 
 
                 acc, guess, summary = sess.run([accuracy,guessed,merged_sum],feed_dict={self.keep_prob: 1.0})
-                print "Validation accuracy=", "{:.9f}".format(acc)
+                print("Validation accuracy=", "{:.9f}".format(acc))
 
                 self.accuracies.append(acc)
                 self.guessed.append(guess)
@@ -1381,7 +1362,7 @@ class SpikeConvNet:
     def save_meta_model(self):
         ''' save meta data in old fashioned format'''
         # Save meta_info yaml
-        print 'Saving: ', self.model_path
+        print('Saving: ', self.model_path)
         with open(join(self.model_path, 'model_info.yaml'), 'w') as f:
             if self.accuracies.size == 1:
                 # not k-fold or k-fold-model
@@ -1397,7 +1378,7 @@ class SpikeConvNet:
                        'MEA dimension': self.mea_dim, 'spike file': self.spike_file_name,
                        'noise level': self.noise_level, 'time [s]': self.processing_time,
                        'tensorflow': tf.__version__ ,'seed': self.seed}
-            cnn = {'learning rate': self.learning_rate, 'size': self.size, 'beta': self.beta,
+            cnn = {'learning rate': self.learning_rate, 'size': self.size,
                    'nepochs': self.training_epochs, 'batch size': self.batch_size,
                    'dropout rate': self.dropout_rate, 'inputs': self.inputs, 'c1size': self.c1size,
                    'c2size': self.c2size, 'ctsize': self.ctsize, 'l1depth': self.l1depth, 'l2depth': self.l2depth,
@@ -1417,7 +1398,8 @@ class SpikeConvNet:
             features = {'feature type': self.feat_type,
                         'amp threshold': self.threshold_detect,
                         'dt': self.dt}
-            features.update({'downsampling factor': self.downsampling_factor})
+            if self.feat_type == '3d':
+                features.update({'downsampling factor': self.downsampling_factor})
 
             # create dictionary for yaml file
             data_yaml = {'General': general,
@@ -1565,7 +1547,7 @@ if __name__ == '__main__':
         pos = sys.argv.index('-val')
         val_type = sys.argv[pos + 1]
     else:
-        val_type = 'hold-model-out'
+        val_type = 'holdout'
     if '-modelout' in sys.argv:
         pos = sys.argv.index('-modelout')
         model_out = int(sys.argv[pos + 1])
@@ -1607,11 +1589,11 @@ if __name__ == '__main__':
     else:
         seed = int(2308)
     if len(sys.argv) == 1:
-        print 'Arguments: \n   -f full-path\n   -feat feature type: AW - FW - AFW - 3d\n   ' \
+        print('Arguments: \n   -f full-path\n   -feat feature type: AW - FW - AFW - 3d\n   ' \
               '-val validation: holdout - k-fold - hold-model-out - k-fold-model\n   ' \
               '-cn cellnames: all - filename\n   -tcn train cellnames file\n   -vcn validation cellnames file\n   ' \
               '-cl classification: binary - m-type\n   ' \
-              '-s  size: xs - s - m - l - xl\n   -modelout model to hold out  -seed random seed (integer)'
+              '-s  size: xs - s - m - l - xl\n   -modelout model to hold out  -seed random seed (integer)')
     else:
         cv = SpikeConvNet(train=True, save=True, spike_folder=spike_folder, feat_type=feat_type, class_type=class_type,
                           val_type=val_type, cellnames=cell_names, size=size, model_out=model_out, nsteps=nsteps,

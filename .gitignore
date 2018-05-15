@@ -1,0 +1,16 @@
+*.pyc
+*~
+config.py
+classification/models/
+classification/results/
+localization/figures/
+localization/models/
+localization/results/
+figures/
+mods/
+logs/
+spikes/
+base_examples_tetrodes/
+yaml_to_yml.py
+compute_soma_Im.py
+.idea

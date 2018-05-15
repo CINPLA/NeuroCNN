@@ -5,6 +5,7 @@
 Predict location on EAP from other models and compares it with validation ones
 
 '''
+from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
@@ -30,21 +31,9 @@ if os.path.exists(join(base_folder,'config.py')):
 from tools import *
 from tftools import *
 
-def load_validation_data(validation_folder):
-    print "Loading validation spike data ..."
-
-    spikes = np.load(join(validation_folder, 'val_spikes.npy'))  # [:spikes_per_cell, :, :]
-    feat = np.load(join(validation_folder, 'val_feat.npy'))  # [:spikes_per_cell, :, :]
-    locs = np.load(join(validation_folder, 'val_loc.npy'))  # [:spikes_per_cell, :]
-    rots = np.load(join(validation_folder, 'val_rot.npy'))  # [:spikes_per_cell, :]
-    cats = np.load(join(validation_folder, 'val_cat.npy'))
-
-    print "Done loading spike data ..."
-
-    return np.array(spikes), np.array(feat), np.array(locs), np.array(rots), np.array(cats)
 
 def load_spikes(spike_folder):
-    print "Loading spike data ..."
+    print("Loading spike data ...")
     spikelist = [f for f in os.listdir(spike_folder) if f.startswith('e_spikes')]
     loclist = [f for f in os.listdir(spike_folder) if f.startswith('e_pos')]
     rotlist = [f for f in os.listdir(spike_folder) if f.startswith('e_rot')]
@@ -61,7 +50,7 @@ def load_spikes(spike_folder):
     for idx, f in enumerate(spikelist):
         samples = int(f.split('_')[2])
         samples_to_read = samples
-        print 'loading ', samples_to_read, ' samples for cell type: ', f
+        print('loading ', samples_to_read, ' samples for cell type: ', f)
         spikes = np.load(join(spike_folder, f))  # [:spikes_per_cell, :, :]
         spikes_list.extend(spikes[:samples_to_read])
         locs = np.load(join(spike_folder, loclist[idx]))  # [:spikes_per_cell, :]
@@ -69,15 +58,15 @@ def load_spikes(spike_folder):
         rots = np.load(join(spike_folder, rotlist[idx]))  # [:spikes_per_cell, :]
         rot_list.extend(rots[:samples_to_read])
 
-    print "Done loading spike data ..."
+    print("Done loading spike data ...")
     return np.array(spikes_list), np.array(loc_list), np.array(rot_list)
 
 
 class Prediction:
     def __init__(self, loc_model_path=None, spike_folder=None):
 
-        self.model_path = os.path.normpath(loc_model_path)
-        self.model_type = os.path.normpath(spike_folder).split(os.sep)[-3]
+        self.model_path = os.path.abspath(loc_model_path)
+        self.model_type = os.path.abspath(spike_folder).split(os.sep)[-3]
         model_info = [f for f in os.listdir(self.model_path) if '.yaml' in f or '.yml' in f][0]
         with open(join(self.model_path, model_info), 'r') as f:
             self.model_info = yaml.load(f)
@@ -100,13 +89,13 @@ class Prediction:
 
         # Localization model
         self.feat_type = self.model_info['Features']['feature type']
-        print 'Feature type: ', self.feat_type
+        print('Feature type: ', self.feat_type)
         self.loc_validation_type = self.model_info['Validation']['validation type']
-        print 'Validation type: ', self.loc_validation_type
+        print('Validation type: ', self.loc_validation_type)
         self.loc_size = self.model_info['CNN']['size']
-        print 'Network size: ', self.loc_size
+        print('Network size: ', self.loc_size)
         self.loc_rotation_type = self.model_info['General']['rotation']
-        print 'Rotation type: ', self.loc_rotation_type
+        print('Rotation type: ', self.loc_rotation_type)
         self.mea_dim = self.model_info['General']['MEA dimension']
 
         self.dt = self.model_info['Features']['dt']
@@ -151,7 +140,7 @@ class Prediction:
         tf.reset_default_graph()
 
         if val_data:
-            print '\nLocalizing with on validation BBP model EAP'
+            print('\nLocalizing with on validation BBP model EAP')
 
             self.pred_loc_n = np.zeros((len(self.cat), 3))
             self.err_n = np.zeros(len(self.cat))
@@ -164,7 +153,6 @@ class Prediction:
 
             with tf.Session() as sess:
                 saver = tf.train.Saver()
-                print join(self.model_path, 'train', 'run%d' % validation_run)
                 ckpt = tf.train.get_checkpoint_state(join(self.model_path, 'train', 'run%d' % validation_run))
                 if ckpt and ckpt.model_checkpoint_path:
                     relative_model_path_idx = ckpt.model_checkpoint_path.index('models/')
@@ -185,7 +173,7 @@ class Prediction:
 
             tf.reset_default_graph()
 
-        print '\nLocalizing neurons with ', self.model_type, ' model EAP'
+        print('\nLocalizing neurons with ', self.model_type, ' model EAP')
         self.other_spikes, self.other_loc, self.other_rot = load_spikes(spike_folder)
         self.other_features = self.return_features(self.other_spikes)
 
@@ -194,7 +182,6 @@ class Prediction:
 
         with tf.Session() as sess:
             saver = tf.train.Saver()
-            print join(self.model_path, 'train', 'run%d' % validation_run)
             ckpt = tf.train.get_checkpoint_state(join(self.model_path, 'train', 'run%d' % validation_run))
             if ckpt and ckpt.model_checkpoint_path:
                 relative_model_path_idx = ckpt.model_checkpoint_path.index('models/')
@@ -225,8 +212,8 @@ class Prediction:
         self.other_err_n = other_err
         self.other_err_dim_n = other_err_dim
 
-        print '\n\nAverage validation error: ', np.mean(self.err_n), ' +- ', np.std(self.err_n)
-        print '\nAverage ', self.model_type, ' error: ', np.mean(self.other_err_n), ' +- ', np.std(self.other_err_n)
+        print('\n\nAverage validation error: ', np.mean(self.err_n), ' +- ', np.std(self.err_n))
+        print('\nAverage ', self.model_type, ' error: ', np.mean(self.other_err_n), ' +- ', np.std(self.other_err_n))
 
         tf.reset_default_graph()
 
@@ -250,27 +237,14 @@ class Prediction:
             features = features.swapaxes(0, 1)
             features = features.swapaxes(1, 2)
         elif self.feat_type == '3d':
-            print 'Downsampling spikes...'
+            print('Downsampling spikes...')
             # downsampled_spikes = ss.resample(self.spikes, self.spikes.shape[2] // self.downsampling_factor, axis=2)
             downsampled_spikes = spikes[:, :, ::int(self.downsampling_factor)]
             features = downsampled_spikes
             self.inputs = spikes.shape[2] // self.downsampling_factor
-            print 'Done'
-        elif self.feat_type == 'PCA':
-            print 'Applying PCA...'
-            spikes_reshape = np.reshape(spikes,
-                                        (spikes.shape[0] * spikes.shape[1], spikes.shape[2]))
-            # coeff, latent, projections = apply_pca(spikes_reshape)
-            coeff, latent, projections = apply_pca(spikes_reshape, n_components=self.pc)
-            # proj_res = np.reshape(projections, (self.spikes.shape))
-            # self.features = proj_res[:, :, :self.pc]
-            features = np.reshape(projections, (spikes.shape[0], spikes.shape[1], self.pc))
-            print 'Done'
+            print('Done')
 
-        if self.feat_type == 'PCA':
-            return coeff, features
-        else:
-            return features
+        return features
 
 
     def inference(self, xx):
@@ -382,7 +356,6 @@ class Prediction:
                 relative_model_path = join(data_dir, 'classification',
                                            ckpt.model_checkpoint_path[relative_model_path_idx:])
                 saver.restore(sess, relative_model_path)
-                print relative_model_path
                 global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
             else:
                 print('No checkpoint file found')
@@ -478,7 +451,6 @@ class Prediction:
                       'id': np.arange(n_obs)}
 
 
-        print join(model_path, 'results')
         results_dir = join(model_path, 'results')
         if not os.path.isdir(results_dir):
             os.makedirs(results_dir)
@@ -520,7 +492,7 @@ if __name__ == '__main__':
         pos = sys.argv.index('-val')
         spikes = sys.argv[pos + 1]
     if len(sys.argv) == 1:
-        print 'Arguments: \n   -mod  CNN model\n   -val  validation spikes'
+        print('Arguments: \n   -mod  CNN model\n   -val  validation spikes')
     elif '-mod' not in sys.argv:
         raise AttributeError('Classification and localization model is required')
     else:

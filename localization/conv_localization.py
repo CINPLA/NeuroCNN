@@ -3,6 +3,8 @@
 Deep net to localize soma position based on NA trough and Rip peak
 
 '''
+from __future__ import print_function
+
 
 import numpy as np
 import tensorflow as tf
@@ -62,8 +64,7 @@ class SpikeConvNet:
                  spike_folder=None, cellnames='all', train_cell_names=None, val_cell_names=None,
                  n_spikes=None, val_percent=None, nsteps=2000,
                  feat_type='NaRep', val_type='holdout', kfolds=5, size='l',
-                 class_type='m-type', cellspecific='allcells',
-                 model_out=5, seed=2308):
+                 class_type='m-type', model_out=5, seed=2308):
 
         if not noise_level is None:
             self.noise_level = noise_level
@@ -75,21 +76,19 @@ class SpikeConvNet:
 
         # Na - NaRep - Rep - 3d
         self.feat_type = feat_type
-        print 'Feature type: ', self.feat_type
+        print('Feature type: ', self.feat_type)
 
         self.val_type = val_type
         if train_cell_names:
             self.val_type = 'provided_datasets'
-        print 'Validation type: ', self.val_type
+        print('Validation type: ', self.val_type)
         if self.val_type == 'k-fold':
             self.kfolds = kfolds
 
         self.model_to_hold_out = model_out
 
         self.size = size
-        print 'Network size: ', self.size
-
-        self.cell_specific = cellspecific
+        print('Network size: ', self.size)
 
         # specify full path to dataset to be used containing simulated data from all cells
         if spike_folder is not None:
@@ -113,10 +112,10 @@ class SpikeConvNet:
             self.info = yaml.load(f)
 
         self.rotation_type = self.info['Location']['rotation']
-        print 'Rotation type: ', self.rotation_type
+        print('Rotation type: ', self.rotation_type)
         self.pitch = self.info['Electrodes']['pitch']
         self.electrode_name = self.info['Electrodes']['electrode_name']
-        print 'Electrode name: ', self.electrode_name
+        print('Electrode name: ', self.electrode_name)
         self.mea_dim = self.info['Electrodes']['dim']
         self.n_elec = np.prod(self.info['Electrodes']['dim'])
         self.n_points = self.info['Electrodes']['n_points']
@@ -124,30 +123,18 @@ class SpikeConvNet:
 
         self.binary_cat = ['EXCIT', 'INHIB']
 
-        if 'bbp' in self.spike_folder and 'hybrid' not in self.spike_folder:
+        if 'bbp' in self.spike_folder:
             self.all_categories = ['BP', 'BTC', 'ChC', 'DBC', 'LBC', 'MC', 'NBC',
                                    'NGC', 'SBC', 'STPC', 'TTPC1', 'TTPC2', 'UTPC']
             self.exc_categories = ['STPC', 'TTPC1', 'TTPC2', 'UTPC']
             self.inh_categories = ['BP', 'BTC', 'ChC', 'DBC', 'LBC', 'MC', 'NBC', 'NGC', 'SBC']
-
-        elif 'allen' in self.spike_folder and 'hybrid' not in self.spike_folder:
-            self.all_categories = ['EXCIT', 'INHIB']
-            self.exc_categories = ['EXCIT']
-            self.inh_categories = ['INHIB']
-
-        elif 'hybrid' in self.spike_folder:
-            self.all_categories = ['BP', 'BTC', 'ChC', 'DBC', 'LBC', 'MC', 'NBC',
-                                   'NGC', 'SBC', 'STPC', 'TTPC1', 'TTPC2', 'UTPC', 'spiny', 'aspiny']
-            self.exc_categories = ['STPC', 'TTPC1', 'TTPC2', 'UTPC', 'spiny']
-            self.inh_categories = ['BP', 'BTC', 'ChC', 'DBC', 'LBC', 'MC', 'NBC', 'NGC', 'SBC', 'aspiny']
 
         self.categories_by_type = {'EXCIT': self.exc_categories,
                                    'INHIB': self.inh_categories}
 
         self.threshold_detect = 5  # uV
 
-        self.all_etypes = ['cADpyr', 'cAC', 'bAC', 'cNAC', 'bNAC', 'dNAC', 'cSTUT', 'bSTUT', 'dSTUT', 'cIR', 'bIR',
-                           'model']
+        self.all_etypes = ['cADpyr', 'cAC', 'bAC', 'cNAC', 'bNAC', 'dNAC', 'cSTUT', 'bSTUT', 'dSTUT', 'cIR', 'bIR']
 
         if val_percent:
             self.val_percent = val_percent
@@ -156,10 +143,10 @@ class SpikeConvNet:
 
         if train_cell_names:
             self.train_cell_names = list(np.loadtxt(join(root_folder, 'localization', train_cell_names), dtype=str))
-            print 'cells from file used for training: ', self.train_cell_names
+            print('cells from file used for training: ', self.train_cell_names)
             if val_cell_names:
                 self.val_cell_names = list(np.loadtxt(join(root_folder, 'localization', val_cell_names), dtype=str))
-                print 'cells from file used for validationm: ', self.val_cell_names
+                print('cells from file used for validationm: ', self.val_cell_names)
             self.cell_names = self.train_cell_names + self.val_cell_names
         else:
             self.train_cell_names = None
@@ -172,11 +159,11 @@ class SpikeConvNet:
                 for ss in spikefiles:
                     split_ss = ss.split('_')
                     self.cell_names.append('_'.join(split_ss[3:-1]))
-                print 'all cells used for training: ', self.cell_names
+                print('all cells used for training: ', self.cell_names)
             else:
                 self.cell_names = list(np.loadtxt(join(root_folder, 'localization', cellnames), dtype=str))
                 np.random.shuffle(self.cell_names)
-                print 'cells from file used for training: ', self.cell_names
+                print('cells from file used for training: ', self.cell_names)
 
         self.dt = 2 ** -5
 
@@ -251,7 +238,7 @@ class SpikeConvNet:
 
 
         # create model folder
-        self.model_name = 'model_' + self.rotation_type + '_' + self.cell_specific + '_' + \
+        self.model_name = 'model_' + self.rotation_type + '_'  + \
                          self.feat_type + '_' + self.val_type + '_' + \
                          self.size + '_' + self.spike_file_name + '_' + \
                          time.strftime("%d-%m-%Y:%H:%M")
@@ -269,178 +256,59 @@ class SpikeConvNet:
         for cc in self.cat_in_dset:
             self.cell_dict.update({int(np.argwhere(np.array(self.all_categories) == cc)): cc})
 
-        if self.cell_specific == 'allcells':
-            self.class_grp = 'all'
+        self.class_grp = 'all'
 
-            self.val_data_dir = join(self.model_path, 'validation_data')
-            if not os.path.isdir(self.val_data_dir):
-                os.makedirs(self.val_data_dir)
+        self.val_data_dir = join(self.model_path, 'validation_data')
+        if not os.path.isdir(self.val_data_dir):
+            os.makedirs(self.val_data_dir)
 
-            # data preprocessing
-            self.class_categories = set()
-            self.pred_categories = set()
-            self._data_preprocessing(self.all_categories)
+        # data preprocessing
+        self.class_categories = set()
+        self.pred_categories = set()
+        self._data_preprocessing(self.all_categories)
 
-            self.class_categories = list(self.class_categories)
-            self.num_categories = len(self.class_categories)
+        self.class_categories = list(self.class_categories)
+        self.num_categories = len(self.class_categories)
 
-            # training
-            if self.train:
-                t_start = time.time()
+        # training
+        if self.train:
+            t_start = time.time()
 
-                self.accuracies, self.preds, self.loc, self.rot, self.cat, self.errors, \
-                self.errors_dim = [], [], [], [], [], [], []
-                self.batch_size = int(self.num_train_feat / 10.)
-                if self.validation_runs > 1:
-                    for v in range(self.validation_runs):
-                        print 'Training/Validation run: ', v + 1, '/', self.validation_runs
-                        self.training(validation_run=v)
-                        self.evaluate(validation_run=v)
-                else:
-                    self.training()
-                    self.evaluate()
+            self.accuracies, self.preds, self.loc, self.rot, self.cat, self.errors, \
+            self.errors_dim = [], [], [], [], [], [], []
+            self.batch_size = int(self.num_train_feat / 10.)
+            if self.validation_runs > 1:
+                for v in range(self.validation_runs):
+                    print('Training/Validation run: ', v + 1, '/', self.validation_runs)
+                    self.training(validation_run=v)
+                    self.evaluate(validation_run=v)
+            else:
+                self.training()
+                self.evaluate()
 
-                self.accuracies = np.squeeze(np.array(self.accuracies))
-                self.preds = np.squeeze(np.array(self.preds))
-                self.loc = np.squeeze(np.array(self.loc))
-                self.rot = np.squeeze(np.array(self.rot))
-                self.cat = np.squeeze(np.array(self.cat))
-                self.errors = np.squeeze(np.array(self.errors))
-                self.errors_dim = np.squeeze(np.array(self.errors_dim))
+            self.accuracies = np.squeeze(np.array(self.accuracies))
+            self.preds = np.squeeze(np.array(self.preds))
+            self.loc = np.squeeze(np.array(self.loc))
+            self.rot = np.squeeze(np.array(self.rot))
+            self.cat = np.squeeze(np.array(self.cat))
+            self.errors = np.squeeze(np.array(self.errors))
+            self.errors_dim = np.squeeze(np.array(self.errors_dim))
 
-                print "Training done"
-                t_end = time.time()
-                self.processing_time = t_end - t_start
-                print 'Training time: ', self.processing_time
+            print("Training done")
+            t_end = time.time()
+            self.processing_time = t_end - t_start
+            print('Training time: ', self.processing_time)
 
-                # final evaluation
-                self.final_evaluate()
+            # final evaluation
+            self.final_evaluate()
 
-                if self.save:
-                    self.save_meta_model()
+            if self.save:
+                self.save_meta_model()
 
-            # cleaning up
-            if not keep_tmp_data:
-                self.remondis()
+        # cleaning up
+        if not keep_tmp_data:
+            self.remondis()
 
-        elif self.cell_specific == 'binary':
-            for bcat in self.binary_cat:
-                # create cell specific model folder
-                print 'Training binary: ', bcat
-                self.class_grp = bcat
-                self.model_path = join(loc_data_dir, 'models', self.model_name, bcat)
-                os.makedirs(self.model_path)
-
-                self.val_data_dir = join(self.model_path, 'validation_data')
-                if not os.path.isdir(self.val_data_dir):
-                    os.makedirs(self.val_data_dir)
-
-                # data preprocessing
-                self.class_categories = set()
-                self.pred_categories = set()
-                self._data_preprocessing(categories=self.categories_by_type[bcat])
-
-                self.class_categories = list(self.class_categories)
-                self.num_categories = len(self.all_categories)
-
-                # training
-                if self.train:
-                    t_start = time.time()
-
-                    self.accuracies, self.preds, self.loc, self.rot, self.cat, self.errors, \
-                    self.errors_dim = [], [], [], [], [], [], []
-                    self.batch_size = int(self.num_train_feat / 10.)
-                    if self.validation_runs > 1:
-                        for v in range(self.validation_runs):
-                            print 'Training/Validation run: ', v + 1, '/', self.validation_runs
-                            self.training(validation_run=v)
-                            self.evaluate(validation_run=v)
-                    else:
-                        self.training()
-                        self.evaluate()
-
-                    self.accuracies = np.squeeze(np.array(self.accuracies))
-                    self.preds = np.squeeze(np.array(self.preds))
-                    self.loc = np.squeeze(np.array(self.loc))
-                    self.rot = np.squeeze(np.array(self.rot))
-                    self.cat = np.squeeze(np.array(self.cat))
-                    self.errors = np.squeeze(np.array(self.errors))
-                    self.errors_dim = np.squeeze(np.array(self.errors_dim))
-
-                    print "Training done"
-                    t_end = time.time()
-                    self.processing_time = t_end - t_start
-                    print 'Training time: ', self.processing_time
-
-                    # final evaluation
-                    self.final_evaluate()
-
-                    if self.save:
-                        self.save_meta_model()
-
-                # cleaning up
-                if not keep_tmp_data:
-                    self.remondis()
-
-        elif self.cell_specific == 'm-type':
-            # check cell types in cell-names
-            for mcat in self.cat_in_dset:
-                # create cell specific model folder
-                print 'Training m-type: ', mcat
-                self.class_grp = mcat
-                self.model_path = join(loc_data_dir, 'models', self.model_name, mcat)
-                os.makedirs(self.model_path)
-
-                self.val_data_dir = join(self.model_path, 'validation_data')
-                if not os.path.isdir(self.val_data_dir):
-                    os.makedirs(self.val_data_dir)
-
-                # data preprocessing
-                self.class_categories = set()
-                self.pred_categories = set()
-                self._data_preprocessing(categories=[mcat], balanced=False)
-
-                self.class_categories = list(self.class_categories)
-                self.num_categories = len(self.all_categories)
-
-                # training
-                if self.train:
-                    t_start = time.time()
-
-                    self.accuracies, self.preds, self.loc, self.rot, self.cat, self.errors, \
-                    self.errors_dim = [], [], [], [], [], [], []
-                    self.batch_size = int(self.num_train_feat / 10.)
-                    if self.validation_runs > 1:
-                        for v in range(self.validation_runs):
-                            print 'Training/Validation run: ', v + 1, '/', self.validation_runs
-                            self.training(validation_run=v)
-                            self.evaluate(validation_run=v)
-                    else:
-                        self.training()
-                        self.evaluate()
-
-                    self.accuracies = np.squeeze(np.array(self.accuracies))
-                    self.preds = np.squeeze(np.array(self.preds))
-                    self.loc = np.squeeze(np.array(self.loc))
-                    self.rot = np.squeeze(np.array(self.rot))
-                    self.cat = np.squeeze(np.array(self.cat))
-                    self.errors = np.squeeze(np.array(self.errors))
-                    self.errors_dim = np.squeeze(np.array(self.errors_dim))
-
-                    print "Training done"
-                    t_end = time.time()
-                    self.processing_time = t_end - t_start
-                    print 'Training time: ', self.processing_time
-
-                    # final evaluation
-                    self.final_evaluate()
-
-                    if self.save:
-                        self.save_meta_model()
-
-                # cleaning up
-                if not keep_tmp_data:
-                    self.remondis()
 
     def _data_preprocessing(self, categories, balanced=True):
         ''' organize training and validation data, extract the features
@@ -463,7 +331,7 @@ class SpikeConvNet:
                 if self.num_morph > 1:
                     # self.model_out = np.random.randint(1, self.num_morph)
                     self.model_out = self.model_to_hold_out
-                    print 'Hold model out: ', self.model_out
+                    print('Hold model out: ', self.model_out)
                 else:
                     raise AttributeError('Hold-model-out can be run when more than one cell id is in the dataset')
 
@@ -481,7 +349,7 @@ class SpikeConvNet:
             # do loading and feature extraction for each cell separately
             for idx, cell in enumerate(categories):
                 avail_samples = sum([int(f.split('_')[2]) for f in spikelist if cell in f])
-                print idx+1, '/', len(categories), ' :', cell, ' avail: ', avail_samples
+                print(idx+1, '/', len(categories), ' :', cell, ' avail: ', avail_samples)
                 n_samples = min_occurrence  #int(avail_samples / occ_dict[cell] * min_occurrence)
                 cells_to_load = [c for c in self.cell_names if cell in c]
                 spikes, loc, rot, cat, etype, morphid, loaded_cat = load_EAP_data(self.spike_folder, \
@@ -497,7 +365,6 @@ class SpikeConvNet:
                         cat = cat[idx_cells]
                         etype = etype[idx_cells]
                         morphid = morphid[idx_cells]
-                print cell, len(cat)
 
                 if len(cat) > 0:
 
@@ -614,8 +481,8 @@ class SpikeConvNet:
                 val_cells_to_load = [c for c in self.val_cell_names if cell in c]
                 val_spikes, val_loc, val_rot, val_cat, val_etype, val_morphid, loaded_cat = \
                     load_EAP_data(self.spike_folder, val_cells_to_load, categories)
-                print idx + 1, '/', len(categories), ' :', cell, ' avail train: ', train_avail_samples, \
-                    ' avail val: ', val_avail_samples
+                print(idx + 1, '/', len(categories), ' :', cell, ' avail train: ', train_avail_samples, \
+                    ' avail val: ', val_avail_samples)
 
                 # subsample min_occurrences
                 if balanced:
@@ -651,7 +518,6 @@ class SpikeConvNet:
                     self.create_tmp_data(val_spikes, val_loc, val_rot, val_cat, val_etype, val_morphid,
                                          dset='validation')
 
-                print cell, n_train, n_val
 
 
     def return_features(self, spikes):
@@ -677,12 +543,12 @@ class SpikeConvNet:
             features = features.swapaxes(0, 1)
             features = features.swapaxes(1, 2)
         elif self.feat_type == '3d':
-            print 'Downsampling spikes...'
+            print('Downsampling spikes...')
             # downsampled_spikes = ss.resample(self.spikes, self.spikes.shape[2] // self.downsampling_factor, axis=2)
             downsampled_spikes = spikes[:, :, ::int(self.downsampling_factor)]
             features = downsampled_spikes
             self.inputs = spikes.shape[2] // self.downsampling_factor
-            print 'Done'
+            print('Done')
 
         return features
 
@@ -760,8 +626,6 @@ class SpikeConvNet:
                     validation_rot = rot[val_idx]
                     validation_cat = cat[val_idx]
                     validation_etype = etype[val_idx]
-
-                    # print train_loc.shape, train_spikes.shape, train_rot.shape, train_cat.shape, train_etype.shape
 
                     self.dump_learndata(tmp_train_dir, [train_loc, train_rot, train_cat, train_etype, train_feat])
                     self.dump_valdata(curr_eval_dir, validation_spikes, validation_feat, validation_loc,
@@ -1116,15 +980,15 @@ class SpikeConvNet:
                 if (epoch + 1) % self.display_step == 0:
                     train_accuracy, summary = sess.run([accuracy, merged],
                                                            feed_dict={self.keep_prob: 1.0})
-                    print "Step:", '%04d' % (epoch + 1), "training accuracy=", "{:.9f}".format(train_accuracy)
-                    print 'Elapsed time: ', time.time() - t_start
+                    print("Step:", '%04d' % (epoch + 1), "training accuracy=", "{:.9f}".format(train_accuracy))
+                    print('Elapsed time: ', time.time() - t_start)
                     train_writer.add_summary(summary, epoch)
                 if epoch + 1 == self.training_epochs:
                     train_accuracy, summary = sess.run([accuracy, merged],
                                                        feed_dict={self.keep_prob: 1.0})
-                    print "Final Step:", '%04d' % (epoch + 1), "training accuracy=", "{:.9f}".format(train_accuracy)
+                    print("Final Step:", '%04d' % (epoch + 1), "training accuracy=", "{:.9f}".format(train_accuracy))
                     self.acc_tr = train_accuracy
-                    print 'Elapsed time: ', time.time() - t_start
+                    print('Elapsed time: ', time.time() - t_start)
                     # Save the model checkpoint periodically.
                     if self.save:
                         checkpoint_path = join(self.model_path, 'train', 'run%d' % validation_run,
@@ -1197,7 +1061,7 @@ class SpikeConvNet:
 
                 acc, pred, summary = sess.run([accuracy, test_pred, merged_sum],
                                               feed_dict={self.keep_prob: 1.0})
-                print "Validation accuracy=", "{:.9f}".format(acc)
+                print("Validation accuracy=", "{:.9f}".format(acc))
 
                 err = np.array([np.linalg.norm(pred[e, :] - test_loc[e, :]) for e in range(pred.shape[0])])
                 err_x = np.array([np.linalg.norm(pred[e, 0] - test_loc[e, 0]) for e in range(pred.shape[0])])
@@ -1232,7 +1096,7 @@ class SpikeConvNet:
     def save_meta_model(self):
         ''' save meta data in old fashioned format'''
         # Save meta_info yaml
-        print 'Saving: ', self.model_path
+        print('Saving: ', self.model_path)
         with open(join(self.model_path, 'model_info.yaml'), 'w') as f:
             if self.accuracies.size == 1:
                 # not k-fold or k-fold-model
@@ -1264,7 +1128,7 @@ class SpikeConvNet:
                        'MEA dimension': self.mea_dim, 'spike file': self.spike_file_name,
                        'noise level': self.noise_level, 'time [s]': self.processing_time,
                        'tensorflow': tf.__version__, 'seed': self.seed}
-            cnn = {'learning rate': self.learning_rate, 'size': self.size, 'beta': self.beta,
+            cnn = {'learning rate': self.learning_rate, 'size': self.size,
                    'nepochs': self.training_epochs, 'batch size': self.batch_size,
                    'dropout rate': self.dropout_rate, 'inputs': self.inputs, 'c1size': self.c1size,
                    'c2size': self.c2size, 'ctsize': self.ctsize, 'l1depth': self.l1depth, 'l2depth': self.l2depth,
@@ -1446,7 +1310,7 @@ if __name__ == '__main__':
         pos = sys.argv.index('-val')
         val_type = sys.argv[pos+1]   # holdout - k-fold - hold-model-out - k-fold-model
     else:
-        val_type = 'hold-model-out'
+        val_type = 'holdout'
     if '-modelout' in sys.argv:
         pos = sys.argv.index('-modelout')
         model_out = int(sys.argv[pos + 1])
@@ -1483,11 +1347,11 @@ if __name__ == '__main__':
     else:
         seed = int(2308)
     if len(sys.argv) == 1:
-        print 'Arguments: \n   -f full-path\n   -feat feature type: Na - Rep - NaRep - 3d\n   ' \
+        print('Arguments: \n   -f full-path\n   -feat feature type: Na - Rep - NaRep - 3d\n   ' \
               '-val validation: holdout - k-fold - hold-model-out - k-fold-model\n   ' \
               '-cn cellnames: all - filename\n   -tcn train cellnames file\n   -vcn validation cellnames file' \
-              '-s  size: xs - s - m - l - xl\n   -modelout model to hold out\n   -seed random seed'
+              '-s  size: xs - s - m - l - xl\n   -modelout model to hold out\n   -seed random seed')
     else:
         cv = SpikeConvNet(save=True, spike_folder=spike_folder, feat_type=feat_type, val_type=val_type, nsteps=nsteps,
-                          cellnames=cell_names, size=size, cellspecific=cell_specific, model_out=model_out,
+                          cellnames=cell_names, size=size, model_out=model_out,
                           train_cell_names=train_cell_names, val_cell_names=val_cell_names, seed=seed)

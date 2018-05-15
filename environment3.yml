@@ -3,11 +3,11 @@ dependencies:
   - python=3
   - pyyaml
   - numpy
-  - scipy
+  - mpi4py
   - pip:
     - matplotlib
     - scikit-learn
     - pandas 
     - tensorflow
     - ipython
-    - deap
+    - h5py

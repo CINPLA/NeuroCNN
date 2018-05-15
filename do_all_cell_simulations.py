@@ -1,3 +1,4 @@
+from __future__ import print_function
 
 """
 This is a bad hack to be able to run models in series. For some reason I run into problems if I try to run different
@@ -17,8 +18,8 @@ cells = 'all'
 if __name__ == '__main__':
 
     if len(sys.argv) == 1:
-        print 'Use: -model bbp, -rot Norot-physrot-3drot, -intraonly only simulate intracellular, -probe' \
-              ' any probe name in electrodes folder, -n number of observations per cell type'
+        print('Use: -rot Norot-physrot-3drot, -intraonly only simulate intracellular, -probe' \
+              ' any probe name in electrodes folder, -n number of observations per cell type')
     else:
         if '-model' in sys.argv:
             pos = sys.argv.index('-model')
@@ -67,7 +68,7 @@ if __name__ == '__main__':
 
 
         for numb, cell_model in enumerate(cell_models):
-            print cell_model, numb + 1, "/", len(cell_models)
+            print(cell_model, numb + 1, "/", len(cell_models))
             os.system("python hbp_cells.py %s %s %d %r %s %s %d" % (join(model_folder, model, cell_model), model, numb,
                                                                      only_intracellular, rotation, probe, nobs))
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 from __future__ import division
+from __future__ import print_function
+
 
 '''
 Test implementation using cell models of the Blue Brain Project with LFPy.
@@ -52,12 +54,12 @@ def get_templatename(f):
     for line in f.readlines():
         if 'begintemplate' in line.split():
             templatename = line.split()[-1]
-            print 'template {} found!'.format(templatename)
+            print('template {} found!'.format(templatename))
             continue
     return templatename
 
 
-def compile_all_mechanisms(model):
+def compile_all_mechanisms(model='bbp'):
     """
     attempt to set up a folder with all unique mechanism mod files and compile them all.
     Assumes all HBP cell models are in a folder 'cell_models'
@@ -68,17 +70,18 @@ def compile_all_mechanisms(model):
 
     neurons = [join(root_folder,'cell_models', model, f) for f in os.listdir(join(root_folder, 'cell_models', model))
                if f != 'mods']
-    print neurons
+    print(neurons)
 
     for nrn in neurons:
         for nmodl in glob(join(nrn, 'mechanisms', '*.mod')):
-            print nmodl
+            print(nmodl)
             while not os.path.isfile(join(root_folder, 'cell_models', model, 'mods', os.path.split(nmodl)[-1])):
-                print 'cp {} {}'.format(nmodl, join(root_folder, 'cell_models', model, 'mods'))
+                print('cp {} {}'.format(nmodl, join(root_folder, 'cell_models', model, 'mods')))
                 os.system('cp {} {}'.format(nmodl, join(root_folder, 'cell_models', model, 'mods')))
 
-    os.chdir('mods')
+    os.chdir(join(root_folder, 'cell_models', model, 'mods'))
     os.system('nrnivmodl')
+    os.chdir(root_folder)
 
 
 def return_cell(cell_folder, model_type, cell_name, end_T, dt, start_T,add_synapses=False):
@@ -93,7 +96,7 @@ def return_cell(cell_folder, model_type, cell_name, end_T, dt, start_T,add_synap
     """
     cwd = os.getcwd()
     os.chdir(cell_folder)
-    print "Simulating ", cell_name
+    print("Simulating ", cell_name)
 
 
     if model_type == 'bbp':
@@ -120,9 +123,9 @@ def return_cell(cell_folder, model_type, cell_name, end_T, dt, start_T,add_synap
         neuron.h.load_file('constants.hoc')
         print('...done.')
         if not hasattr(neuron.h, morphology):
-            print 'loading morpho...'
+            print('loading morpho...')
             neuron.h.load_file(1, "morphology.hoc")
-            print 'done.'
+            print('done.')
 
         if not hasattr(neuron.h, biophysics):
             neuron.h.load_file(1, "biophysics.hoc")
@@ -132,9 +135,9 @@ def return_cell(cell_folder, model_type, cell_name, end_T, dt, start_T,add_synap
             neuron.h.load_file(1, join('synapses', 'synapses.hoc'))
 
         if not hasattr(neuron.h, templatename):
-            print 'Loading template...'
+            print('Loading template...')
             neuron.h.load_file(1, "template.hoc")
-            print 'done.'
+            print('done.')
 
         morphologyfile = os.listdir('morphology')[0]#glob('morphology\\*')[0]
 
@@ -205,7 +208,6 @@ def run_cell_model(cell_model, model_type, sim_folder, figure_folder, cell_model
     """
 
     cell_name = os.path.split(cell_model)[-1]
-    print sim_folder
 
     if not os.path.isfile(join(sim_folder, ('i_spikes_%s.npy' % cell_name))) and \
             not os.path.isfile(join(sim_folder, ('v_spikes_%s.npy' % cell_name))):
@@ -244,7 +246,7 @@ def run_cell_model(cell_model, model_type, sim_folder, figure_folder, cell_model
             spikes = list(np.array(spikes) + cut_out[0])
             num_spikes = len(spikes)
 
-            print "Input weight: ", weight, " - Num Spikes: ", num_spikes
+            print("Input weight: ", weight, " - Num Spikes: ", num_spikes)
             if num_spikes >= num_to_save * 3:
                 weight *= 0.75
             elif num_spikes <= num_to_save:
@@ -274,7 +276,7 @@ def run_cell_model(cell_model, model_type, sim_folder, figure_folder, cell_model
         return cell
 
     else:
-        print 'Cell has already be simulated. Using stored membrane currents'
+        print('Cell has already be simulated. Using stored membrane currents')
         np.random.seed(123 * cell_model_id)
         T = 1200
         dt = 2 ** -5
@@ -358,7 +360,7 @@ def run_cell_model_poisssyn(cell_model, model_type, sim_folder, figure_folder, c
         np.save(join(sim_folder, 'i_spikes_%s.npy' % cell_name), i_spikes)
         np.save(join(sim_folder, 'v_spikes_%s.npy' % cell_name), v_spikes)
     else:
-        print 'Cell has already be simulated. Using stored membrane currents'
+        print('Cell has already be simulated. Using stored membrane currents')
 
 
 def calc_extracellular(cell_model, model_type, save_sim_folder,
@@ -425,9 +427,9 @@ def calc_extracellular(cell_model, model_type, save_sim_folder,
             (target_num_spikes, cell_save_name, time.strftime("%d-%m-%Y")))) and \
         os.path.isfile(join(save_folder, 'e_rot_%d_%s_%s.npy' %
             (target_num_spikes, cell_save_name, time.strftime("%d-%m-%Y")))):
-        print 'Cell ', cell_save_name, ' extracellular spikes have already been simulated and saved'
+        print('Cell ', cell_save_name, ' extracellular spikes have already been simulated and saved')
     else:
-        print 'Cell ', cell_save_name, ' extracellular spikes to be simulated'
+        print('Cell ', cell_save_name, ' extracellular spikes to be simulated')
 
         x_plane = 0.
         pos = MEA.get_elcoords(x_plane,**elinfo)
@@ -470,7 +472,7 @@ def calc_extracellular(cell_model, model_type, save_sim_folder,
 
         while len(save_spikes) < target_num_spikes:
             if i > 1000 * target_num_spikes:
-                print "Gave up finding spikes above noise level for %s" % cell_name
+                print("Gave up finding spikes above noise level for %s" % cell_name)
                 break
             spike_idx = np.random.randint(0, i_spikes.shape[0])  # Each cell has several spikes to choose from
             cell.imem = i_spikes[spike_idx, :, :]
@@ -485,7 +487,7 @@ def calc_extracellular(cell_model, model_type, save_sim_folder,
                 save_rot.append(rot)
                 save_offs.append(offs)
                 plot_spike = False
-                print 'Cell: ' + cell_name + ' Progress: [' + str(len(save_spikes)) + '/' + str(target_num_spikes) + ']'
+                print('Cell: ' + cell_name + ' Progress: [' + str(len(save_spikes)) + '/' + str(target_num_spikes) + ']')
                 saved += 1
             else:
                 pass
@@ -520,8 +522,7 @@ def calc_extracellular(cell_model, model_type, save_sim_folder,
                         }
             yaml.dump(data_yaml, f, default_flow_style=False)
 
-        print save_spikes.shape
-        
+
 def get_physrot_specs(cell_name, model):
     '''  Return physrot specifications for cell_type
     '''
@@ -724,23 +725,19 @@ if __name__ == '__main__':
         raise RuntimeError("Wrong usage. Give argument 'compile' to compile mechanisms," +
                            " and cell name, model_type, cell id, only_intra (bool), rotation, probe to simulate cell")
     elif sys.argv[1] == 'compile':
-            compile_all_mechanisms(sys.argv[2])
+            compile_all_mechanisms()
             sys.exit(0)
     elif len(sys.argv) == 8:
         cell_folder, model, numb, only_intracellular, rotation, probe, nobs = sys.argv[1:]
         only_intracellular = str2bool(only_intracellular)
 
-
     extra_sim_folder = join(data_dir, 'spikes', model)
     vm_im_sim_folder = join(data_dir, 'spikes', model, 'Vm_Im')
 
-    print vm_im_sim_folder
-
-    print cell_folder, model, numb, only_intracellular, rotation
     cell = run_cell_model(cell_folder, model, vm_im_sim_folder, vm_im_sim_folder, int(numb))
 
     if not only_intracellular:
-        print 'ROTATION type: ', rotation
+        print('ROTATION type: ', rotation)
         calc_extracellular(cell_folder, model, extra_sim_folder, vm_im_sim_folder, rotation, int(numb), probe, nobs)
 
 

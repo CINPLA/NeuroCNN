@@ -1,3 +1,4 @@
+from __future__ import print_function
 # Helper functions
 
 import numpy as np
@@ -51,7 +52,7 @@ def savitzky_golay(y, window_size, order, deriv=0, rate=1):
 
 def load_EAP_data(spike_folder, cell_names, all_categories,samples_per_cat=None):
 
-    print "Loading spike data ..."
+    print("Loading spike data ...")
     spikelist = [f for f in os.listdir(spike_folder) if f.startswith('e_spikes') and  any(x in f for x in cell_names)]
     loclist = [f for f in os.listdir(spike_folder) if f.startswith('e_pos') and  any(x in f for x in cell_names)]
     rotlist = [f for f in os.listdir(spike_folder) if f.startswith('e_rot') and  any(x in f for x in cell_names)]
@@ -82,7 +83,7 @@ def load_EAP_data(spike_folder, cell_names, all_categories,samples_per_cat=None)
             samples_to_read = samples
         etype = f.split('_')[5]
         morphid = f.split('_')[6]
-        print 'loading ', samples_to_read , ' samples for cell type: ', f
+        print('loading ', samples_to_read , ' samples for cell type: ', f)
         if category in all_categories:
             spikes = np.load(join(spike_folder, f)) # [:spikes_per_cell, :, :]
             spikes_list.extend(spikes[:samples_to_read])
@@ -97,15 +98,15 @@ def load_EAP_data(spike_folder, cell_names, all_categories,samples_per_cat=None)
         else:
             ignored_categories.add(category)
 
-    print "Done loading spike data ..."
-    print "Loaded categories", loaded_categories
-    print "Ignored categories", ignored_categories
+    print("Done loading spike data ...")
+    print("Loaded categories", loaded_categories)
+    print("Ignored categories", ignored_categories)
     return np.array(spikes_list), np.array(loc_list), np.array(rot_list), np.array(category_list, dtype=str), \
         np.array(etype_list, dtype=str), np.array(morphid_list, dtype=int), loaded_categories
 
 
 def load_validation_data(validation_folder,load_mcat=False):
-    print "Loading validation spike data ..."
+    print("Loading validation spike data ...")
 
     spikes = np.load(join(validation_folder, 'val_spikes.npy'))  # [:spikes_per_cell, :, :]
     feat = np.load(join(validation_folder, 'val_feat.npy'))  # [:spikes_per_cell, :, :]
@@ -114,19 +115,18 @@ def load_validation_data(validation_folder,load_mcat=False):
     cats = np.load(join(validation_folder, 'val_cat.npy'))
     if load_mcat:
         mcats = np.load(join(validation_folder, 'val_mcat.npy'))
-        print "Done loading spike data ..."
-        return np.array(spikes), np.array(feat), np.array(locs), np.array(rots), np.array(cats),np.array(mcats)
+        print("Done loading spike data ...")
+        return np.array(spikes), np.array(feat), np.array(locs), np.array(rots), np.array(cats), np.array(mcats)
     else:
-        print "Done loading spike data ..."
-        return spikes,feat,locs,rots,cats
+        print("Done loading spike data ...")
+        return np.array(spikes), np.array(feat), np.array(locs), np.array(rots), np.array(cats)
 
 
 def load_vm_im(vm_im_folder, cell_names, all_categories):
     
-    print "Loading membrane potential and currents data ..."
+    print("Loading membrane potential and currents data ...")
     vmlist = [f for f in os.listdir(vm_im_folder) if f.startswith('v_spikes') and  any(x in f for x in cell_names)]
     imlist = [f for f in os.listdir(vm_im_folder) if f.startswith('i_spikes') and  any(x in f for x in cell_names)]
-    print vmlist
     cat_list = [f.split('_')[3] for f in vmlist]
     entries_in_category = {cat: cat_list.count(cat) for cat in all_categories if cat in all_categories}
     # print "Number of cells in each category", entries_in_category
@@ -153,9 +153,9 @@ def load_vm_im(vm_im_folder, cell_names, all_categories):
         else:
             ignored_categories.append(category)
 
-    print "Done loading spike data ..."
-    print "Loaded categories", loaded_categories
-    print "Ignored categories", ignored_categories
+    print("Done loading spike data ...")
+    print("Loaded categories", loaded_categories)
+    print("Ignored categories", ignored_categories)
     return np.array(vm_list), im_list, np.array(loaded_categories, dtype=str)
 
 
