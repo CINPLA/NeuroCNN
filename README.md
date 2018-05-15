@@ -39,7 +39,7 @@ python setup.py install
 Cell models can be downloaded from the Neocortical Micro Circuit Portal https://bbp.epfl.ch/nmc-portal/welcome
 (13 models from layer 5 for testing are already included).
 
-Newly downloaded models should be unzipped to the folder "cell_models/bbp/"
+Newly downloaded models should be unzipped to the folder `cell_models/bbp/`
 Then you must run `python hbp_cells.py compile` to compile .mod files. 
 This only has to be done once, if you do not add more models or manipulate the .mod files
 (if you find problems in compiling try to install: `sudo apt-get install lib32ncurses5-dev`)
@@ -68,7 +68,7 @@ To run localization cd in the `localization` directory and run:
 
 You can give command line arguments to customize the network:
 
-- -f full-path
+- -f -- path-to-spikes-folder
 - -feat -- feature type: Na - Rep - NaRep (default) - 3d (Waveform)
 - -val -- validation: holdout (default) - hold-model-out
 - -n -- number of training steps
