@@ -28,80 +28,71 @@ from tftools import *
 
 TOWER_NAME = 'tower'
 
-def _variable_summaries(var):
-    """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
-    # with tf.name_scope('summaries'):
-    mean = tf.reduce_mean(var)
-    tf.summary.scalar(var.op.name + '/mean', mean)
-    with tf.name_scope('stddev'):
-        stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
-    tf.summary.scalar(var.op.name + '/stddev', stddev)
-    tf.summary.scalar(var.op.name + '/max', tf.reduce_max(var))
-    tf.summary.scalar(var.op.name + '/min', tf.reduce_min(var))
-    tf.summary.histogram(var.op.name + '/histogram', var)
-
-def _activation_summary(x):
-    """Helper to create summaries for activations.
-
-    Creates a summary that provides a histogram of activations.
-    Creates a summary that measure the sparsity of activations.
-
-    Args:
-      x: Tensor
-    Returns:
-      nothing
-    """
-    # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
-    # session. This helps the clarity of presentation on tensorboard.
-    tensor_name = re.sub('%s_[0-9]*/' % TOWER_NAME, '', x.op.name)
-    tf.summary.histogram(tensor_name + '/activations', x)
-    tf.summary.scalar(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
-
-def _variable_on_cpu(name, shape, initializer):
-    """Helper to create a Variable stored on CPU memory.
-
-    Args:
-      name: name of the variable
-      shape: list of ints
-      initializer: initializer for Variable
-
-    Returns:
-      Variable Tensor
-    """
-    with tf.device('/cpu:0'):
-        var = tf.get_variable(name, shape, initializer=initializer)
-    return var
-
-
-def _variable_with_weight_decay(name, shape, stddev, wd):
-    """Helper to create an initialized Variable with weight decay.
-
-    Note that the Variable is initialized with a truncated normal distribution.
-    A weight decay is added only if one is specified.
-
-    Args:
-      name: name of the variable
-      shape: list of ints
-      stddev: standard deviation of a truncated Gaussian
-      wd: add L2Loss weight decay multiplied by this float. If None, weight
-          decay is not added for this Variable.
-
-    Returns:
-      Variable Tensor
-    """
-    var = _variable_on_cpu(name, shape,
-                           tf.truncated_normal_initializer(stddev=stddev))
-    if wd is not None:
-        weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
-        tf.add_to_collection('losses', weight_decay)
-    return var
-
-
 class SpikeConvNet:
+    """ Convolutional Neural Network class for neuron classification
+    based on extracellular action potentials (EAPs) measured with 
+    Multi-Electrode Arrays (MEAs)
+
+    Parameters:
+    -----------
+    train, bool (optional, default True)
+        Whether to train the network
+    noise_level, float (optional, default None)
+        Standard deviation for additive Gaussian signal noise.
+        If ``None``, no noise is added.
+    save, bool (optional, default False)
+        Whether to save the results
+    keep_tmp_data, bool (optional, default False)
+        Whether to keep the temporary training data
+    spike_folder, str (optional, default None)
+        Path to spike data used for training and validation. 
+        If ``None``, an arbitrary spike folder of the data directory is taken.
+    cellnames, str (optional, default 'all')
+        Name of a file in the classification directory which specifies cell 
+        names to be used. If ``all``, all available cells in the spike_folder
+        directory are used. CAUTION: This affects training and learning and 
+        cannot be used together with the train_cell_names and val_cell_names 
+        parameters which should be used instead.
+    train_cell_names, str (optional, default None)
+        Name of a file in the classification directory which specifies cell 
+        names to be used for training. If ``None``, cells are selected according
+        to the cellnames parameter.
+    val_cell_names, str (optional, default None)
+        Name of a file in the classification directory which specifies cell 
+        names to be used for validation. If ``None``, cells are selected
+        according to the cellnames parameter.
+    nsteps, int (optional, default=2000)
+        Number of training epochs,
+    n_spikes, int (optional, default None)
+        Number of spikes taken into account. If ``None``, all available spikes
+        are taken into account (in a balanced manner).
+    val_percent, float (optional, default=10.)
+        Percentage of data to be left out for validation in combination with
+        val_type=``holdout``.
+    feat_type, str (optional, defauls 'AW')
+        String which specifies features of EAPs to be used by the CNN. Possible 
+        values are 'AW','FW','AFW','3d'.
+    val_type, str (optional, default 'holdout')
+        Specifies the validation method. Possible values are 'holdout', 'k-fold'
+        'hold-model-out', 'k-fold-model'. CAUTION: If 'train_cell_names' and 
+        'val_cell_names' are specified, these completely specify the training
+        and validation data splitting.
+    kfolds, int (optional, default=5)
+        Number of runs in a 'k-fold' validation setting.
+    model_out, int (optional, default=5)
+        Model number to be left out in a 'model-out' validation setting.
+    size, str (optional, default 'l')
+        Specifies CNN size. Possible values: 'xs','s','m','l','xl'
+    class_type, str (optional, default 'm-type')
+        Classification type ('binary' for excitatory/inhibitory classification
+        or 'm-type' for morphological subclass classification.
+    seed, int (optional, default=2308)
+        Random seed for TensorFlow variable initialization. 
+    """
     def __init__(self, train=True, noise_level=None, save=False,keep_tmp_data=False,
-                 save_model_name = None, spike_folder = None, cellnames='all',
+                 spike_folder = None, cellnames='all',
                  train_cell_names=None, val_cell_names=None, nsteps=2000,
-                 training_class=None, n_spikes=None, val_percent=None, early_stopping = False,
+                 n_spikes=None, val_percent=10.,
                  feat_type='AW', val_type = 'holdout', kfolds = 5, size='l', class_type='m-type',
                  model_out=5,seed=2308):
 
@@ -121,7 +112,7 @@ class SpikeConvNet:
 
         self.val_type = val_type
         if train_cell_names:
-            self.val_type = 'provided_datasets'
+            self.val_type = 'provided-datasets'
         print('Validation type: ', self.val_type)
         if self.val_type == 'k-fold':
             self.kfolds = kfolds
@@ -189,10 +180,7 @@ class SpikeConvNet:
 
         self.all_etypes = ['cADpyr', 'cAC', 'bAC', 'cNAC', 'bNAC', 'dNAC', 'cSTUT', 'bSTUT', 'dSTUT', 'cIR', 'bIR']
 
-        if val_percent:
-            self.val_percent = val_percent
-        else:
-            self.val_percent = 10
+        self.val_percent = val_percent
 
         if train_cell_names:
             self.train_cell_names = list(np.loadtxt(join(root_folder, 'classification', train_cell_names), dtype=str))
@@ -1077,7 +1065,7 @@ class SpikeConvNet:
                 W_conv1 = weight_variable([self.c1size[0], self.c1size[1], self.inputs, self.l1depth], "wconv1", self.seed)
                 b_conv1 = bias_variable([self.l1depth], "wb1")
                 h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1,name=scope.name)
-                _activation_summary(h_conv1)
+                activation_summary(h_conv1,TOWER_NAME)
             if self.extra_overfit:
                 h_conv1_drop = tf.nn.dropout(h_conv1, self.keep_prob)
                 h_pool1 = max_pool_2d(h_conv1_drop)
@@ -1089,7 +1077,7 @@ class SpikeConvNet:
                 W_conv2 = weight_variable([self.c2size[0], self.c2size[1], self.l1depth, self.l2depth], "wconv2", self.seed)
                 b_conv2 = bias_variable([self.l2depth], "wb2")
                 h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2,name=scope.name)
-                _activation_summary(h_conv2)
+                activation_summary(h_conv2,TOWER_NAME)
             if self.extra_overfit:
                 h_conv2_drop = tf.nn.dropout(h_conv2, self.keep_prob)
                 h_pool2 = max_pool_2d(h_conv2_drop)
@@ -1099,14 +1087,14 @@ class SpikeConvNet:
             spatial_feat_size = np.array(np.ceil(spatial_feat_size/2.),dtype=int)
             with tf.variable_scope('local3') as scope:
                 if self.extra_overfit:
-                    W_fc1 = _variable_with_weight_decay("wfc1", shape=[np.prod(spatial_feat_size)
+                    W_fc1 = variable_with_weight_decay("wfc1", shape=[np.prod(spatial_feat_size)
                                                                        * self.l2depth, self.fully], stddev=.1, wd=0.004)
                 else:
                     W_fc1 = weight_variable([np.prod(spatial_feat_size) * self.l2depth, self.fully], "wfc1", self.seed)
                 b_fc1 = bias_variable([self.fully], "wbfc1")
                 h_pool2_flat = tf.reshape(h_pool2, [-1, np.prod(spatial_feat_size) * self.l2depth])
                 h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1,name=scope.name)
-                _activation_summary(h_fc1)
+                activation_summary(h_fc1,TOWER_NAME)
         else:
             self.keep_prob = tf.placeholder("float",name='keep_prob')
             x_image = tf.reshape(xx, [-1, self.mea_dim[0], self.mea_dim[1], self.inputs, 1])
@@ -1114,7 +1102,7 @@ class SpikeConvNet:
                 W_conv1 = weight_variable([self.c1size[0], self.c1size[1], self.ctsize, 1, self.l1depth], "wconv1", self.seed)
                 b_conv1 = bias_variable([self.l1depth], "wb1")
                 h_conv1 = tf.nn.relu(conv3d(x_image, W_conv1) + b_conv1,name=scope.name)
-                _activation_summary(h_conv1)
+                activation_summary(h_conv1,TOWER_NAME)
             if self.extra_overfit:
                 h_conv1_drop = tf.nn.dropout(h_conv1, self.keep_prob)
                 h_pool1 = max_pool_3d(h_conv1_drop)
@@ -1126,7 +1114,7 @@ class SpikeConvNet:
                 W_conv2 = weight_variable([self.c2size[0], self.c2size[1], self.ctsize, self.l1depth, self.l2depth], "wconv2", self.seed)
                 b_conv2 = bias_variable([self.l2depth], "wb2")
                 h_conv2 = tf.nn.relu(conv3d(h_pool1, W_conv2) + b_conv2,name=scope.name)
-                _activation_summary(h_conv2)
+                activation_summary(h_conv2,TOWER_NAME)
             if self.extra_overfit:
                 h_conv2_drop = tf.nn.dropout(h_conv2, self.keep_prob)
                 h_pool2 = max_pool_3d(h_conv2_drop)
@@ -1136,14 +1124,14 @@ class SpikeConvNet:
             temp_feat_size = int(np.ceil(temp_feat_size / 2.))
             with tf.variable_scope('local3') as scope:
                 if self.extra_overfit:
-                    W_fc1 = _variable_with_weight_decay("wfc1", shape=[
+                    W_fc1 = variable_with_weight_decay("wfc1", shape=[
                         np.prod(spatial_feat_size) * temp_feat_size * self.l2depth, self.fully], stddev=.1, wd=0.004)
                 else:
                     W_fc1 = weight_variable([np.prod(spatial_feat_size) * temp_feat_size * self.l2depth, self.fully], "wfc1", self.seed)
                 b_fc1 = bias_variable([self.fully], "wbfc1")
                 h_pool2_flat = tf.reshape(h_pool2, [-1, np.prod(spatial_feat_size) * temp_feat_size * self.l2depth])
                 h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1,name=scope.name)
-                _activation_summary(h_fc1)
+                activation_summary(h_fc1,TOWER_NAME)
 
         with tf.variable_scope('output') as scope:
             h_fc1_drop = tf.nn.dropout(h_fc1, self.keep_prob)
@@ -1152,7 +1140,7 @@ class SpikeConvNet:
 
             # Use simple linear comnination for regrassion (no softmax)
             y_conv = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
-            _activation_summary(y_conv)
+            activation_summary(y_conv,TOWER_NAME)
 
         return y_conv
 

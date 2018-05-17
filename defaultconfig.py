@@ -11,6 +11,3 @@ machine_name='not specified'
 root_folder=os.path.dirname(os.path.abspath(__file__))
 data_dir=root_folder
 expdata_dir=data_dir
-
-# local defaults
-ncores_loc = 2 

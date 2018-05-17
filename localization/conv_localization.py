@@ -29,36 +29,6 @@ from tftools import *
 
 TOWER_NAME = 'tower'
 
-def _variable_summaries(var):
-    """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
-    # with tf.name_scope('summaries'):
-    mean = tf.reduce_mean(var)
-    tf.summary.scalar(var.op.name + '/mean', mean)
-    with tf.name_scope('stddev'):
-        stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
-    tf.summary.scalar(var.op.name + '/stddev', stddev)
-    tf.summary.scalar(var.op.name + '/max', tf.reduce_max(var))
-    tf.summary.scalar(var.op.name + '/min', tf.reduce_min(var))
-    tf.summary.histogram(var.op.name + '/histogram', var)
-
-def _activation_summary(x):
-    """Helper to create summaries for activations.
-
-    Creates a summary that provides a histogram of activations.
-    Creates a summary that measure the sparsity of activations.
-
-    Args:
-      x: Tensor
-    Returns:
-      nothing
-    """
-    # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
-    # session. This helps the clarity of presentation on tensorboard.
-    tensor_name = re.sub('%s_[0-9]*/' % TOWER_NAME, '', x.op.name)
-    tf.summary.histogram(tensor_name + '/activations', x)
-    tf.summary.scalar(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
-
-
 class SpikeConvNet:
     def __init__(self, save=True, train=True, noise_level=None, keep_tmp_data=False,
                  spike_folder=None, cellnames='all', train_cell_names=None, val_cell_names=None,
@@ -80,7 +50,7 @@ class SpikeConvNet:
 
         self.val_type = val_type
         if train_cell_names:
-            self.val_type = 'provided_datasets'
+            self.val_type = 'provided-datasets'
         print('Validation type: ', self.val_type)
         if self.val_type == 'k-fold':
             self.kfolds = kfolds
@@ -865,7 +835,7 @@ class SpikeConvNet:
                                           self.seed)
                 b_conv1 = bias_variable([self.l1depth], "wb1")
                 h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1, name=scope.name)
-                _activation_summary(h_conv1)
+                activation_summary(h_conv1,TOWER_NAME)
             h_pool1 = max_pool_2d(h_conv1)
             spatial_feat_size = np.ceil(np.array(self.mea_dim) / 2.)
             with tf.variable_scope('conv2') as scope:
@@ -873,7 +843,7 @@ class SpikeConvNet:
                                           self.seed)
                 b_conv2 = bias_variable([self.l2depth], "wb2")
                 h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2, name=scope.name)
-                _activation_summary(h_conv2)
+                activation_summary(h_conv2,TOWER_NAME)
             h_pool2 = max_pool_2d(h_conv2)
             spatial_feat_size = np.array(np.ceil(spatial_feat_size / 2.), dtype=int)
             with tf.variable_scope('local3') as scope:
@@ -881,7 +851,7 @@ class SpikeConvNet:
                 b_fc1 = bias_variable([self.fully], "wbfc1")
                 h_pool2_flat = tf.reshape(h_pool2, [-1, np.prod(spatial_feat_size) * self.l2depth])
                 h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1, name=scope.name)
-                _activation_summary(h_fc1)
+                activation_summary(h_fc1,TOWER_NAME)
         else:
             x_image = tf.reshape(xx, [-1, self.mea_dim[0], self.mea_dim[1], self.inputs, 1])
             with tf.variable_scope('conv1') as scope:
@@ -889,7 +859,7 @@ class SpikeConvNet:
                                           self.seed)
                 b_conv1 = bias_variable([self.l1depth], "wb1")
                 h_conv1 = tf.nn.relu(conv3d(x_image, W_conv1) + b_conv1, name=scope.name)
-                _activation_summary(h_conv1)
+                activation_summary(h_conv1,TOWER_NAME)
             h_pool1 = max_pool_3d(h_conv1)
             spatial_feat_size = np.ceil(np.array(self.mea_dim) / 2.)
             temp_feat_size = np.ceil(self.inputs / 2.)
@@ -898,7 +868,7 @@ class SpikeConvNet:
                                           "wconv2", self.seed)
                 b_conv2 = bias_variable([self.l2depth], "wb2")
                 h_conv2 = tf.nn.relu(conv3d(h_pool1, W_conv2) + b_conv2, name=scope.name)
-                _activation_summary(h_conv2)
+                activation_summary(h_conv2,TOWER_NAME)
             h_pool2 = max_pool_3d(h_conv2)
             spatial_feat_size = np.array(np.ceil(spatial_feat_size / 2.), dtype=int)
             temp_feat_size = int(np.ceil(temp_feat_size / 2.))
@@ -908,7 +878,7 @@ class SpikeConvNet:
                 b_fc1 = bias_variable([self.fully], "wbfc1")
                 h_pool2_flat = tf.reshape(h_pool2, [-1, np.prod(spatial_feat_size) * temp_feat_size * self.l2depth])
                 h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1, name=scope.name)
-                _activation_summary(h_fc1)
+                activation_summary(h_fc1,TOWER_NAME)
 
         with tf.variable_scope('output') as scope:
             self.keep_prob = tf.placeholder("float", name='keep_prob')
@@ -918,7 +888,7 @@ class SpikeConvNet:
 
             # Use simple linear comnination for regrassion (no softmax)
             y_conv = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
-            _activation_summary(y_conv)
+            activation_summary(y_conv,TOWER_NAME)
 
         return y_conv
 
@@ -996,7 +966,7 @@ class SpikeConvNet:
                         saver.save(sess, checkpoint_path, global_step=epoch)
                         print("Model saved in file: %s" % checkpoint_path)
 
-        except Exception, e:
+        except Exception as e:
             # Report exceptions to the coordinator.
             coord.request_stop(e)
         finally:
@@ -1147,7 +1117,7 @@ class SpikeConvNet:
                 validation.update({'model out': self.model_out})
             elif self.val_type == 'holdout':
                 validation.update({'validation percent': self.val_percent})
-            elif self.val_type == 'provided_datasets':
+            elif self.val_type == 'provided-datasets':
                 validation.update({'training models': str(list(self.train_cell_names)),
                                    'validation models': str(list(self.val_cell_names))})
 

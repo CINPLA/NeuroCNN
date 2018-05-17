@@ -18,8 +18,11 @@ cells = 'all'
 if __name__ == '__main__':
 
     if len(sys.argv) == 1:
-        print('Use: -rot Norot-physrot-3drot, -intraonly only simulate intracellular, -probe' \
-              ' any probe name in electrodes folder, -n number of observations per cell type')
+        print('Use: \n\t -rot <arg> \t possible rotation arguments: Norot-physrot-3drot, \n' \
+              '\t -intraonly \t only simulate intracellular,\n' \
+              '\t -model <name> \t cell model name (default=bbp), \n' \
+              '\t -probe <name> \t any probe name in electrodes folder, \n' \
+              '\t -n <int> \t number of observations per cell type')
     else:
         if '-model' in sys.argv:
             pos = sys.argv.index('-model')
