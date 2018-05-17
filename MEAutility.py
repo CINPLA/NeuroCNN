@@ -304,12 +304,20 @@ def get_elcoords(xoffset, dim, pitch, electrode_name, sortlist, **kwargs):
         z = np.concatenate((np.arange(pitch[1] / 2., coldims[0] * pitch[1], pitch[1]),
                             np.arange(0., coldims[1] * pitch[1], pitch[1]),
                             np.arange(pitch[1] / 2., coldims[2] * pitch[1], pitch[1]))) + zshift
-    elif 'neuropixels-384-v1' in electrode_name.lower():
-        x, y, z = np.mgrid[0:1, -(dim[0] - 1) / 2.:dim[0] / 2.:1, -(dim[1] - 1) / 2.:dim[1] / 2.:1]
-        x = x + xoffset
-        yoffset = np.array([pitch[0] / 4., -pitch[0] / 4.] * (dim[1] / 2))
-        y = np.add(y * pitch[0], yoffset)  # y*pitch[0]
-        z = z * pitch[1]
+    elif 'neuropixels' in electrode_name.lower():
+        if 'v1' in electrode_name.lower():
+            x, y, z = np.mgrid[0:1,-(dim[0]-1)/2.:dim[0]/2.:1, -(dim[1]-1)/2.:dim[1]/2.:1]
+            x=x+xoffset
+            yoffset = np.array([pitch[0]/4.,-pitch[0]/4.]*(dim[1]/2)) 
+            y=np.add(y*pitch[0],yoffset) #y*pitch[0]
+            z=z*pitch[1]
+        elif 'v2' in electrode_name.lower():
+            x, y, z = np.mgrid[0:1,-(dim[0]-1)/2.:dim[0]/2.:1, -(dim[1]-1)/2.:dim[1]/2.:1]
+            x=x+xoffset
+            y=y*pitch[0]
+            z=z*pitch[1]
+        else:
+            raise NotImplementedError('This version of the NeuroPixels Probe is not implemented')
     else:
         x, y, z = np.mgrid[0:1, -(dim[0] - 1) / 2.:dim[0] / 2.:1, -(dim[1] - 1) / 2.:dim[1] / 2.:1]
         x = x + xoffset
