@@ -95,7 +95,8 @@ class SpikeConvNet:
                  n_spikes=None, val_percent=10.,
                  feat_type='AW', val_type = 'holdout', kfolds = 5, size='l', class_type='m-type',
                  model_out=5,seed=2308):
-
+        """ Initialization
+        """
         if not noise_level is None:
             self.noise_level = noise_level
         else:
@@ -104,9 +105,16 @@ class SpikeConvNet:
         self.save = save
         self.seed = seed
 
-        self.extra_overfit = False
+        # If self.extra_overfit=True, an additional dropout in convolutional 
+        # layers is implemented and variables in the fully connected layer have
+        # additional weight decay to prevent from overfitting
+        self.extra_overfit = False 
 
-        # AW (amp-width) - FW (FWHM - Width) - AF (amp-FWHM) - AFW (amp-FHWM-width) - 3d
+        # AW (amplitude-width)
+        # FW (FWHM - Width)
+        # AF (amplitude-FWHM)
+        # AFW (amplitude-FHWM-width)
+        # 3d (downsampled version of the entire waveform)
         self.feat_type = feat_type
         print('Feature type: ', self.feat_type)
 
@@ -265,15 +273,6 @@ class SpikeConvNet:
         else:
             self.n_spikes = 'all'
 
-        ########################
-        ######### old workflow #
-        ########################
-
-        # self._set_up_conv_net()
-
-        ########################
-        ######### new workflow #
-        ########################
 
         # create model folder
         self.model_name = 'model_' + self.rotation_type + '_' + self.classification + '_' +\
@@ -294,7 +293,9 @@ class SpikeConvNet:
         self.datacounter = 0
         self.datafilenames = ['data_batch_%d.csv' % fn for fn in range(self.ndatafiles) ]
 
-        # data preprocessing
+        ######################
+        # data preprocessing #
+        ######################
         self._data_preprocessing(self.all_categories)
         
         self.class_categories = list(self.class_categories)
@@ -302,7 +303,9 @@ class SpikeConvNet:
         self.num_categories = len(self.pred_categories)
         self.out = self.num_categories
 
-        # training
+        ############
+        # training #
+        ############
         if self.train:
             t_start = time.time()
 
@@ -340,8 +343,18 @@ class SpikeConvNet:
 
 
     def _data_preprocessing(self, categories, balanced=True):
-        ''' organize training and validation data, extract the features
-        put everything into temporary directions, from which an input queue is created in tensorflow
+        ''' Data preprocessing: 
+        - organize training and validation data
+        - extract the features
+        - put everything into temporary directions, 
+          from which an input queue is created in tensorflow
+        
+        Parameters:
+        -----------
+        categories, list
+            List of cell categories to load
+        balanced, bool (optional, default True)
+            Whether to balance the data according to predicted classes
         '''
         if not self.train_cell_names:
             # Get even number of observations per class
@@ -684,7 +697,15 @@ class SpikeConvNet:
 
 
     def return_features(self,spikes):
-        ''' extract features from spikes
+        ''' Extract features from spikes
+        Parameters:
+        -----------
+        spikes, array_like
+            Spike data to extract features from
+
+        Returns:
+        --------
+        features, array_like
         '''
         # Create feature set:
         if self.feat_type == 'AW':
@@ -738,7 +759,21 @@ class SpikeConvNet:
         return features
 
     def create_tmp_data(self,spikes,loc,rot,cat,etype,morphid,mcat=None,dset=None):
-        ''' devide train and validation data and store it temporary
+        ''' Divide train and validation data and store it temporary
+        
+        Parameters:
+        -----------
+        spikes, array_like
+        loc, array_like
+        rot, array_like
+        cat, array_like
+        etype, array_like
+        morphid, array_like
+        mcat, array_like (optional, default None)
+        dset, str (optional, default None)
+            If ``None``, parameter arrays are split according to self.val_type .
+            If 'train', all input data is treaten as training data,
+            if 'validation', input data is treaten as validation data.
         '''
         if not dset:
             num_spikes = len(list(cat))
@@ -1379,7 +1414,7 @@ class SpikeConvNet:
                 validation.update({'model out': self.model_out})
             elif self.val_type == 'holdout':
                 validation.update({'validation percent': self.val_percent})
-            elif self.val_type == 'provided_datasets':
+            elif self.val_type == 'provided-datasets':
                 validation.update({'training models': str(list(self.train_cell_names)),
                                    'validation models': str(list(self.val_cell_names))})
 

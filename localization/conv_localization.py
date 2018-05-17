@@ -30,12 +30,70 @@ from tftools import *
 TOWER_NAME = 'tower'
 
 class SpikeConvNet:
+    """ Convolutional Neural Network class for neuron classification
+    based on extracellular action potentials (EAPs) measured with 
+    Multi-Electrode Arrays (MEAs)
+
+    Parameters:
+    -----------
+    save, bool (optional, default True)
+        Whether to save the results
+    train, bool (optional, default True)
+        Whether to train the network
+    noise_level, float (optional, default None)
+        Standard deviation for additive Gaussian signal noise.
+        If ``None``, no noise is added.
+    keep_tmp_data, bool (optional, default False)
+        Whether to keep the temporary training data
+    spike_folder, str (optional, default None)
+        Path to spike data used for training and validation. 
+        If ``None``, an arbitrary spike folder of the data directory is taken.
+    cellnames, str (optional, default 'all')
+        Name of a file in the classification directory which specifies cell 
+        names to be used. If ``all``, all available cells in the spike_folder
+        directory are used. CAUTION: This affects training and learning and 
+        cannot be used together with the train_cell_names and val_cell_names 
+        parameters which should be used instead.
+    train_cell_names, str (optional, default None)
+        Name of a file in the classification directory which specifies cell 
+        names to be used for training. If ``None``, cells are selected according
+        to the cellnames parameter.
+    val_cell_names, str (optional, default None)
+        Name of a file in the classification directory which specifies cell 
+        names to be used for validation. If ``None``, cells are selected
+        according to the cellnames parameter.
+    n_spikes, int (optional, default None)
+        Number of spikes taken into account. If ``None``, all available spikes
+        are taken into account (in a balanced manner).
+    val_percent, float (optional, default=10.)
+        Percentage of data to be left out for validation in combination with
+        val_type=``holdout``.
+    nsteps, int (optional, default=2000)
+        Number of training epochs,
+    feat_type, str (optional, defauls 'NaRep')
+        String which specifies features of EAPs to be used by the CNN. Possible 
+        values are 'Na','NaRep','Rep','3d'.
+    val_type, str (optional, default 'holdout')
+        Specifies the validation method. Possible values are 'holdout', 'k-fold'
+        'hold-model-out', 'k-fold-model'. CAUTION: If 'train_cell_names' and 
+        'val_cell_names' are specified, these completely specify the training
+        and validation data splitting.
+    kfolds, int (optional, default=5)
+        Number of runs in a 'k-fold' validation setting.
+    model_out, int (optional, default=5)
+        Model number to be left out in a 'model-out' validation setting.
+    size, str (optional, default 'l')
+        Specifies CNN size. Possible values: 'xs','s','m','l','xl'
+    seed, int (optional, default=2308)
+        Random seed for TensorFlow variable initialization. 
+    """
     def __init__(self, save=True, train=True, noise_level=None, keep_tmp_data=False,
                  spike_folder=None, cellnames='all', train_cell_names=None, val_cell_names=None,
-                 n_spikes=None, val_percent=None, nsteps=2000,
+                 n_spikes=None, val_percent=10., nsteps=2000,
                  feat_type='NaRep', val_type='holdout', kfolds=5, size='l',
-                 class_type='m-type', model_out=5, seed=2308):
-
+                 model_out=5, seed=2308):
+        """ Initialization
+        """
         if not noise_level is None:
             self.noise_level = noise_level
         else:
@@ -106,10 +164,7 @@ class SpikeConvNet:
 
         self.all_etypes = ['cADpyr', 'cAC', 'bAC', 'cNAC', 'bNAC', 'dNAC', 'cSTUT', 'bSTUT', 'dSTUT', 'cIR', 'bIR']
 
-        if val_percent:
-            self.val_percent = val_percent
-        else:
-            self.val_percent = 10
+        self.val_percent = val_percent
 
         if train_cell_names:
             self.train_cell_names = list(np.loadtxt(join(root_folder, 'localization', train_cell_names), dtype=str))
@@ -196,16 +251,6 @@ class SpikeConvNet:
         else:
             self.n_spikes = 'all'
 
-        ########################
-        ######### old workflow #
-        ########################
-
-        # self._set_up_conv_net()
-
-        ########################
-        ######### new workflow #
-        ########################
-
 
         # create model folder
         self.model_name = 'model_' + self.rotation_type + '_'  + \
@@ -232,7 +277,9 @@ class SpikeConvNet:
         if not os.path.isdir(self.val_data_dir):
             os.makedirs(self.val_data_dir)
 
-        # data preprocessing
+        ######################
+        # data preprocessing #
+        ######################
         self.class_categories = set()
         self.pred_categories = set()
         self._data_preprocessing(self.all_categories)
@@ -240,7 +287,9 @@ class SpikeConvNet:
         self.class_categories = list(self.class_categories)
         self.num_categories = len(self.class_categories)
 
-        # training
+        ############
+        # training #
+        ############
         if self.train:
             t_start = time.time()
 
