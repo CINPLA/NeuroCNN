@@ -8,7 +8,7 @@ Test implementation using cell models of the Blue Brain Project with LFPy.
 The example assumes that cell models available from
 https://bbpnmc.epfl.ch/nmc-portal/downloads are unzipped in the folder 'cell_models'
 
-The function compile_all_mechanisms most be ran once before any cell simulation
+The function compile_all_mechanisms must be run once before any cell simulation
 '''
 
 import os
@@ -60,15 +60,20 @@ def get_templatename(f):
 
 
 def compile_all_mechanisms(model='bbp'):
-    """
-    attempt to set up a folder with all unique mechanism mod files and compile them all.
-    Assumes all HBP cell models are in a folder 'cell_models'
+    """ Attempt to set up a folder with all unique mechanism *.mod files and 
+        compile them all. assumes all cell models are in a folder 'cell_models'
+    
+    Parameters:
+    -----------
+    model : string (optional, default='bbp')
+        Cell model type ('bbp' - Blue Brain Project, i.e. NMC database)
     """
 
     if not os.path.isdir(join(root_folder, 'cell_models', model, 'mods')):
         os.mkdir(join(root_folder, 'cell_models', model, 'mods'))
 
-    neurons = [join(root_folder,'cell_models', model, f) for f in os.listdir(join(root_folder, 'cell_models', model))
+    neurons = [join(root_folder,'cell_models', model, f) \
+               for f in os.listdir(join(root_folder, 'cell_models', model)) \
                if f != 'mods']
     print(neurons)
 
@@ -84,15 +89,28 @@ def compile_all_mechanisms(model='bbp'):
     os.chdir(root_folder)
 
 
-def return_cell(cell_folder, model_type, cell_name, end_T, dt, start_T,add_synapses=False):
-    """
-    Function to load Human Brain Project cell models
-    :param cell_folder: where the cell model is stored
-    :param cell_name: name of the cell
-    :param end_T: simulation length [ms]
-    :param dt: time resoultion [ms]
-    :param start_T: simulation start time (recording starts at 0 ms)
-    :return: LFPy cell object
+def return_cell(cell_folder, model_type, cell_name, end_T, dt, start_T):
+    """ Function to load cell models
+    
+    Parameters:
+    -----------
+    cell_folder : string
+        Path to folder where cell model is saved.
+    model_type : string
+        Cell model type (e.g. 'bbp' for Human Brain Project)    
+    cell_name : string
+        Name of the cell
+    end_T : float
+        Simulation length [ms]
+    dt: float
+        Time step of simulation [ms]
+    start_T: float
+        Simulation start time (recording starts at 0 ms)
+
+    Returns:
+    --------
+    cell : object
+        LFPy cell object
     """
     cwd = os.getcwd()
     os.chdir(cell_folder)
@@ -147,7 +165,7 @@ def return_cell(cell_folder, model_type, cell_name, end_T, dt, start_T,add_synap
         cell = LFPy.TemplateCell(morphology=join('morphology', morphologyfile),
                          templatefile=join('template.hoc'),
                          templatename=templatename,
-                         templateargs=1 if add_synapses else 0,
+                         templateargs=0,
                          tstop=end_T,
                          tstart=start_T,
                          dt=dt,
@@ -157,29 +175,59 @@ def return_cell(cell_folder, model_type, cell_name, end_T, dt, start_T,add_synap
                          verbose=True)
         print('...done.')
 
+    else:
+        raise NotImplementedError('Cell model %s is not implemented'\
+                                  % model_type)
+
     os.chdir(cwd)
     return cell
 
 
 def find_spike_idxs(v, thresh=-30):
-    """
-    :param v: membrane potential
-    :return: Number of zero-crossings in the positive direction, i.e., number of spikes
+    """ Find spike indices
+    
+    Parameters:
+    -----------
+    v: array_like
+        Membrane potential
+    thresh: float (optional, default = -30)
+        Threshold for spike detections
+
+    Returns:
+    --------
+    spikes : array_like
+        Indices of threshold crossings in the positive direction, i.e. spikes
     """
     spikes = [idx for idx in range(len(v) - 1) if v[idx] < thresh < v[idx + 1]]
     return spikes
 
 
 def set_input(weight, dt, T, cell, delay, stim_length):
-    """
-    Set current input synapse in soma
-    :param weight: strength of input current [nA]
-    :param dt: time step of simulation [ms]
-    :param T: Total simulation time [ms]
-    :param cell: cell object from LFPy
-    :param delay: when to start the input [ms]
-    :param stim_length: duration of injected current [ms]
-    :return: NEURON vector of input current, cell object, and synapse
+    """ Set current input synapse in soma
+    
+    Parameters:
+    -----------
+    weight : float
+        Strength of input current [nA]
+    dt : float
+        Time step of simulation [ms]
+    T : float
+        Total simulation time [ms]
+    cell : object
+        Cell object from LFPy
+    delay : float
+        Delay for input,i.e. when to start the input [ms]
+    stim_length: float
+        Duration of injected current [ms]
+    
+    Returns:
+    --------
+    noiseVec :  NEURON vector
+        NEURON vector of input current
+    cell : object
+        LFPy cell object
+    synapse : NEURON synapse
+        NEURON synapse object
     """
 
     tot_ntsteps = int(round(T / dt + 1))
@@ -199,12 +247,27 @@ def set_input(weight, dt, T, cell, delay, stim_length):
     return noiseVec, cell, syn
 
 
-def run_cell_model(cell_model, model_type, sim_folder, figure_folder, cell_model_id):
-    """
-    Run simulation and adjust input strength to have between number of spikes between num_spikes and 3*num_spikes
-    :param cell_model: Name of cell model (should correspond to name of subfolder in folder "cell_models"
-    :param figure_folder: Folder to save figures in
-    :param cell_model_id: number for random seed
+def run_cell_model(cell_model, model_type, sim_folder, cell_model_id):
+    """ Run simulation and adjust input strength to have a certain number of 
+        spikes (num_to_save < num_spikes <= 3*num_to_save 
+        where num_to_save=10 by default)
+
+    Parameters:
+    -----------
+    cell_model : string
+        Path to folder where cell model is saved.
+    model_type : string
+        Cell model type (e.g. 'bbp')    
+    sim_folder : string
+        Data directory for transmembrane currents and membrane potential
+        of the neuron.
+    cell_model_id: int
+        Arbitrary cell id, used to set the numpy.random seed.
+
+    Returns:
+    --------
+    cell : object
+        LFPy cell object
     """
 
     cell_name = os.path.split(cell_model)[-1]
@@ -284,96 +347,31 @@ def run_cell_model(cell_model, model_type, sim_folder, figure_folder, cell_model
 
         return cell
 
-def activate_synapses(cell):
-    '''activate inserted synapses
-    '''
+def calc_extracellular(cell_model, model_type, save_sim_folder, load_sim_folder,\
+                       rotation, cell_model_id, elname, nobs, position=None):
+    """  Loads data from previous cell simulation, and use results to generate
+         arbitrary number of spikes above a certain noise level.
 
-    # get pre_mtypes and their id
-    pre_mtypes = cell.template.synapses.pre_mtypes
-    # loop over mtypes
-    for i in range(int(cell.template.synapses.pre_mtypes.size())):
-        pre_mtype_id = int(cell.template.synapses.pre_mtypes.x[i])
-        # pre_mtype_freqs = $o1.synapses.pre_mtype_freqs
-        # pre_mtype_name = $o1.synapses.id_mtype_map.o(pre_mtype_id).s
-        active_pre_mtypes = cell.template.synapses.active_pre_mtypes
-        # activate specific pre_mtype synapse by setting the value of active_pre_mtypes.x[pre_mtype_id] to 1
-        active_pre_mtypes.x[pre_mtype_id]=1
-        # update_synapses() in NEURON
-        # cell.cell.synapses.update_synapses(synapse_plot_dummy)
-        cell.template.synapses.update_synapses()
+    Parameters:
+    -----------
+    cell_model : string
+        Path to folder where cell model is saved.
+    model_type : string
+        Cell model type (e.g. 'bbp')    
+    save_sim_folder : string
+        Path to folder where to save EAP data
+    load_sim_folder : string
+        Path to folder from which  NEURON simulation results (currents, 
+        membrane potential) are loaded
+    rotation: string
+        Type of rotation to apply to neuron morphologies 
+        ('Norot','physrot','3drot')
+    cell_model_id: int
+        Arbitrary cell id, used to set the numpy.random seed.
 
-
-
-def run_cell_model_poisssyn(cell_model, model_type, sim_folder, figure_folder, cell_model_id):
-    """
-    Run simulation and adjust input strength to have between number of spikes between num_spikes and 3*num_spikes
-    :param cell_model: Name of cell model (should correspond to name of subfolder in folder "cell_models"
-    :param figure_folder: Folder to save figures in
-    :param cell_model_id: number for random seed
-    """
-    cell_name = os.path.split(cell_model)[-1]
-
-    if not os.path.isfile(join(sim_folder, ('i_spikes_%s.npy' % cell_name))) and \
-            not os.path.isfile(join(sim_folder, ('v_spikes_%s.npy' % cell_name))):
-
-        np.random.seed(123 * cell_model_id)
-        T = 1500
-        dt = 2 ** -5
-        cell = return_cell(cell_model, model_type, cell_name, T, dt, 0,add_synapses=True)
-        
-        activate_synapses(cell)
-
-        # delay = 200
-        # stim_length = 1000
-        # weight = 0.23
-        # # weight = -1.25
-
-        num_spikes = 0
-        spikes = []
-
-        cut_out = [2. / dt, 5. / dt]
-        num_to_save = 10
-
-        while not num_to_save < num_spikes <= num_to_save * 3:
-            # noiseVec, cell, syn = set_input(weight, dt, T, cell, delay, stim_length)
-            cell.simulate(rec_imem=True)
-
-            t = cell.tvec
-            v = cell.somav
-            t = t  # [-cut_off_idx:] #- t[-cut_off_idx]
-            v = v  # [-cut_off_idx:]
-            spikes = find_spike_idxs(v)
-            num_spikes = len(spikes)
-            print('Number of spikes %d' % num_spikes)
-
-        t = t[0:(int(cut_out[0]) + int(cut_out[1]))] - t[int(cut_out[0])]
-        i_spikes = np.zeros((num_to_save, cell.totnsegs, len(t)))
-        v_spikes = np.zeros((num_to_save, len(t)))
-        for idx, spike_idx in enumerate(spikes[1:num_to_save+1]):
-            v_spike = v[spike_idx - int(cut_out[0]):spike_idx + int(cut_out[1])]
-            i_spike = cell.imem[:, spike_idx - int(cut_out[0]):spike_idx + int(cut_out[1])]
-            i_spikes[idx, :, :] = i_spike
-            v_spikes[idx, :] = v_spike
-
-        if not os.path.isdir(sim_folder):
-            os.makedirs(sim_folder)
-        np.save(join(sim_folder, 'i_spikes_%s.npy' % cell_name), i_spikes)
-        np.save(join(sim_folder, 'v_spikes_%s.npy' % cell_name), v_spikes)
-    else:
-        print('Cell has already be simulated. Using stored membrane currents')
-
-
-def calc_extracellular(cell_model, model_type, save_sim_folder,
-                       load_sim_folder, rotation, cell_model_id, elname, nobs, position=None):
-    """
-    Loads data from previous cell simulation, and use results to generate arbitrary number of spikes above a certain
-    noise level.
-    :param cell_model: Folder where cell model is
-    :param save_sim_folder: Folder to save data
-    :param load_sim_folder: Folder to load neuron sim currents
-    :param rotation: type of rotation to apply to neuron morphologies
-    :param cell_model_id: number to make random seed
-    :return:
+    Returns:
+    --------
+        nothing, but saves the result
     """
     sim_folder = join(save_sim_folder, rotation)
 
@@ -500,19 +498,23 @@ def calc_extracellular(cell_model, model_type, save_sim_folder,
         save_rot = np.array(save_rot)
         save_offs = np.array(save_offs)
 
-        np.save(join(save_folder, 'e_spikes_%d_%s_%s.npy' % (target_num_spikes, cell_save_name, time.strftime("%d-%m-%Y"))),
-                save_spikes)
-        np.save(join(save_folder, 'e_pos_%d_%s_%s.npy' % (target_num_spikes, cell_save_name, time.strftime("%d-%m-%Y"))),
-                save_pos)
-        np.save(join(save_folder, 'e_rot_%d_%s_%s.npy' % (target_num_spikes, cell_save_name, time.strftime("%d-%m-%Y"))),
-                save_rot)
+        np.save(join(save_folder, 'e_spikes_%d_%s_%s.npy'\
+                     % (target_num_spikes, cell_save_name,\
+                        time.strftime("%d-%m-%Y"))), save_spikes)
+        np.save(join(save_folder, 'e_pos_%d_%s_%s.npy'\
+                     % (target_num_spikes, cell_save_name,\
+                        time.strftime("%d-%m-%Y"))), save_pos)
+        np.save(join(save_folder, 'e_rot_%d_%s_%s.npy'\
+                     % (target_num_spikes, cell_save_name,\
+                        time.strftime("%d-%m-%Y"))), save_rot)
         if not os.path.isfile(join(save_folder, 'e_elpts_%d.npy' % target_num_spikes)):
             np.save(join(save_folder, 'e_elpts_%d.npy' % target_num_spikes),
                     save_offs)
 
         # Log information: (consider xml)
-        with open(join(save_folder, 'e_info_%d_%s_%s.yaml' % (target_num_spikes, cell_save_name, time.strftime("%d-%m-%Y"))),
-                'w') as f:
+        with open(join(save_folder, 'e_info_%d_%s_%s.yaml'\
+                       % (target_num_spikes,cell_save_name,\
+                          time.strftime("%d-%m-%Y"))),'w') as f:
             # create dictionary for yaml file
             data_yaml = {'General': {'cell name': cell_name, 'target spikes': target_num_spikes, 
                                      'noise level': noise_level, 'NEURON': neuron.h.nrnversion(1), 
@@ -524,8 +526,20 @@ def calc_extracellular(cell_model, model_type, save_sim_folder,
 
 
 def get_physrot_specs(cell_name, model):
-    '''  Return physrot specifications for cell_type
-    '''
+    """  Return physrot specifications for cell types
+    
+    Parameters:
+    -----------
+    cell_name : string
+        The name of the cell.
+
+    Returns:
+    --------
+    polarlim : array_like
+        lower and upper bound for the polar angle
+    pref_orient : array_like
+        3-dim vetor of preferred orientation 
+    """
     if model == 'bbp':
         polarlim = {'BP': [0.,15.],
                     'BTC': None, # [0.,15.],
@@ -555,78 +569,64 @@ def get_physrot_specs(cell_name, model):
                        'TTPC2': [0.,0.,1.],
                        'UTPC': [0.,0.,1.]}
         return polarlim[cell_name.split('_')[1]], pref_orient[cell_name.split('_')[1]]
-    elif model=='hay':
-        return [0, 15], [0., 0., 1.]
-    elif model=='almog':
-        return [0, 15], [0., 0., 1.]
+    else:
+        raise NotImplementedError('Cell model %s is not implemented'\
+                                  % model_type)
 
-def get_exprot_specs(cell_name, model):
-    '''  Return physrot specifications for cell_type
-    '''
-    if model == 'bbp':
-        polarlim = {'BP': [0.,15.],
-                    'BTC': None, # [0.,15.],
-                    'ChC': None, # [0.,15.],
-                    'DBC': None, # [0.,15.],
-                    'LBC': None, # [0.,15.],
-                    'MC': [0.,15.],
-                    'NBC': None,
-                    'NGC': None,
-                    'SBC': None,
-                    'STPC': [0.,15.],
-                    'TTPC1': [0.,15.],
-                    'TTPC2': [0.,15.],
-                    'UTPC': [0.,15.]}
-        # how it's implemented, the NMC y axis points into the pref_orient direction after rotation
-        pref_orient = {'BP': [ 0.66653247, 0.,  0.745476 ], # -41.8 degree rotated
-                       'BTC': None, # [0.,0.,1.],
-                       'ChC': None, # [0.,0.,1.],
-                       'DBC': None, # [0.,0.,1.],
-                       'LBC': None, # [0.,0.,1.],
-                       'MC': [ 0.66653247, 0.,  0.745476 ],
-                       'NBC': None,
-                       'NGC': None,
-                       'SBC': None,
-                       'STPC': [ 0.66653247, 0.,  0.745476 ],
-                       'TTPC1': [ 0.66653247, 0.,  0.745476 ],
-                       'TTPC2': [ 0.66653247, 0.,  0.745476 ],
-                       'UTPC': [ 0.66653247, 0.,  0.745476 ]}
-        return polarlim[cell_name.split('_')[1]], pref_orient[cell_name.split('_')[1]]
-    elif model=='hay':
-        return [0, 15], [ 0.66653247, 0.,  0.745476 ]
-    elif model=='almog':
-        return [0, 15], [ 0.66653247, 0.,  0.745476 ]
+def return_extracellular_spike(cell, cell_name, model_type,\
+                            electrode_parameters, limits, rotation, pos=None):
+    """    Calculate extracellular spike on MEA 
+           at random position relative to cell
 
-
-
-def return_extracellular_spike(cell, cell_name, model_type, electrode_parameters, limits, rotation, pos=None):
-    """
-    Calculate extracellular spike at tetrode at random position relative to cell
-    :param cell: cell object from LFPy
-    :param cell_name: name of cell model (string)
-    :param electrode_parameters: parameters to initialize LFPy.RecExtElectrode
-    :param limits: boundaries for neuron locations
-    :param rotation: 'Norot', 'Xrot', '3drot', 'physrot' - random rotation to apply to the neuron
-    :param figure_folder: folder to save the figure to
-    :param plot_spike: boolean value. Should we plot the spike?
-    :return: Extracellular spike at tetrode contacts
+    Parameters:
+    -----------
+    cell: object
+        cell object from LFPy
+    cell_name: string
+        name of cell model
+    electrode_parameters: dict
+        parameters to initialize LFPy.RecExtElectrode
+    limits: array_like
+        boundaries for neuron locations, shape=(3,2)
+    rotation: string 
+        random rotation to apply to the neuron ('Norot', '3drot', 'physrot')
+    pos: array_like, (optional, default None)
+        Can be used to set the cell soma to a specific position. If ``None``,
+        the random position is used.
+    Returns:
+    --------
+    Extracellular spike for each MEA contact site
     """
 
     def get_xyz_angles(R):
-        '''
-        R = R_z.R_y.R_x
+        ''' Get rotation angles for each axis from rotation matrix
+        
+        Parameters;
+        -----------
+        R : matrix
+            3x3 rotation matrix
+
+        Returns:
+        --------
+        R_z : float
+        R_y : float
+        R_x : float
+            Three angles for rotations around axis, defined by R = R_z.R_y.R_x
         '''
         rot_x = np.arctan2(R[2,1],R[2,2])
         rot_y = np.arcsin(-R[2,0])
         rot_z = np.arctan2(R[1,0],R[0,0])
-        # rotation = {
-        #     'x' : rot_x,
-        #     'y' : rot_y,
-        #     'z' : rot_z,
-        # }
         return rot_x,rot_y,rot_z
 
     def get_rnd_rot_Arvo():
+        """ Generate uniformly distributed random rotation matrices
+        see: 'Fast Random Rotation Matrices' by Arvo (1992)
+        
+        Returns:
+        --------
+        R : 3x3 matrix
+            random rotation matrix
+        """
         gamma = np.random.uniform(0,2.*np.pi)
         rotation_z = np.matrix([[np.cos(gamma), -np.sin(gamma), 0],
                                 [np.sin(gamma), np.cos(gamma), 0],
@@ -640,8 +640,28 @@ def return_extracellular_spike(cell, cell_name, model_type, electrode_parameters
         return M
 
     def check_solidangle(matrix,pre,post,polarlim):
-        ''' check whether matrix rotates pre into polarlim region around post
-        '''
+        """ Check whether a matrix rotates the vector 'pre' into a region
+            defined by 'polarlim' around the vector 'post'
+
+        Parameters:
+        -----------
+        matrix : matrix
+            3x3 rotation matrix
+        pre : array_like
+            3-dim vector to be rotated
+        post : array_like
+            axis of the cones defining the post-rotation region
+        polarlim : [float,float]
+            Angles specifying the opening of the inner and outer cone 
+            (aperture = 2*polarlim),
+            i.e. the angle between rotated pre vector and post vector has to ly 
+            within these polar limits.  
+
+        Returns:
+        --------
+        test : bool
+            True if the vector np.dot(matrix,pre) lies inside the specified region.
+        """
         postest = np.dot(matrix,pre)
         c=np.dot(post/np.linalg.norm(post),postest/np.linalg.norm(postest))
         if np.cos(np.deg2rad(polarlim[1])) <= c <= np.cos(np.deg2rad(polarlim[0])):
@@ -716,25 +736,45 @@ def return_extracellular_spike(cell, cell_name, model_type, electrode_parameters
 
 
 def str2bool(v):
-  return v.lower() in ("yes", "true", "t", "1")
+    """ Transform string to bool
+    
+    Parameters:
+    -----------
+    v : str
+    
+    Returns:
+    --------
+    transformed_v, bool
+        If v is any of ("yes", "true", "t", "1") (case insensitive) 
+        ``True`` is returned, else ``False``
+    """
+    return v.lower() in ("yes", "true", "t", "1")
 
 
 if __name__ == '__main__':
 
-    if len(sys.argv) == 1:
-        raise RuntimeError("Wrong usage. Give argument 'compile' to compile mechanisms," +
-                           " and cell name, model_type, cell id, only_intra (bool), rotation, probe to simulate cell")
-    elif sys.argv[1] == 'compile':
+    if len(sys.argv) == 2 and sys.argv[1] == 'compile':
             compile_all_mechanisms()
             sys.exit(0)
     elif len(sys.argv) == 8:
         cell_folder, model, numb, only_intracellular, rotation, probe, nobs = sys.argv[1:]
         only_intracellular = str2bool(only_intracellular)
+    else: 
+        raise RuntimeError("Wrong usage. Give arguments: \n \
+        \t 'compile' to compile mechanisms \n \
+        \n\t or for cell simulation: \n \
+        \t <cell name> \t path to cell model files\n \
+        \t <model_type> \t cell model type (here 'bbp')\n \
+        \t <cell id> \t arbitrary cell id, used to set the numpy.random seed\n \
+        \t <only_intra> \t (bool) whether to simulate only the intracellular potential \n \
+        \t <rotation> \t specifies neuron-MEA alignment ('Norot','physrot','3drot')\n \
+        \t <probe> \t MEA probe name (corresponding to the json file in electrodes directory)\n \
+        \t <nobs> \t number of EAP observations to simulate")
 
     extra_sim_folder = join(data_dir, 'spikes', model)
     vm_im_sim_folder = join(data_dir, 'spikes', model, 'Vm_Im')
 
-    cell = run_cell_model(cell_folder, model, vm_im_sim_folder, vm_im_sim_folder, int(numb))
+    cell = run_cell_model(cell_folder, model, vm_im_sim_folder, int(numb))
 
     if not only_intracellular:
         print('ROTATION type: ', rotation)

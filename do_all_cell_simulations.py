@@ -72,7 +72,8 @@ if __name__ == '__main__':
 
         for numb, cell_model in enumerate(cell_models):
             print(cell_model, numb + 1, "/", len(cell_models))
-            os.system("python hbp_cells.py %s %s %d %r %s %s %d" % (join(model_folder, model, cell_model), model, numb,
-                                                                     only_intracellular, rotation, probe, nobs))
+            os.system("python hbp_cells.py %s %s %d %r %s %s %d"\
+                      % (join(model_folder, model, cell_model), model, numb,\
+                         only_intracellular, rotation, probe, nobs))
 
 
