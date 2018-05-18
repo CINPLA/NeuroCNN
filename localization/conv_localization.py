@@ -396,8 +396,6 @@ class SpikeConvNet:
                         for j, et in enumerate(self.all_etypes):
                             if et in typ:
                                 etype[i] = j
-                    # mapdict = dict(np.loadtxt(self.etype_mapfile,dtype=str))
-                    # etype = np.array([convert_metype(mapdict,typ) for typ in etype])
 
                     # Add noise to spikes
                     if self.noise_level > 0:
