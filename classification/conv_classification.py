@@ -331,9 +331,6 @@ class SpikeConvNet:
             self.processing_time = t_end - t_start
             print('Training time: ', self.processing_time)
 
-            # final evaluation
-            self.final_evaluate()
-
             if self.save:
                 self.save_meta_model()
 
@@ -694,6 +691,7 @@ class SpikeConvNet:
 
     def return_features(self,spikes):
         ''' Extract features from spikes
+
         Parameters:
         -----------
         spikes, array_like
@@ -985,8 +983,15 @@ class SpikeConvNet:
 
 
     def dump_learndata(self,filedir,data):
-        ''' dump the data to files in filedir
-        '''
+        """ dump the data to files in filedir
+        
+        Parameters:
+        -----------
+        filedir : string
+            Path to directory the data is saved to.
+        data : array_like
+            List of data arrays to be saved.
+        """
 
         for i in range(data[0].shape[0]):
             filename = self.datafilenames[self.datacounter % self.ndatafiles]
@@ -1004,8 +1009,25 @@ class SpikeConvNet:
             self.datacounter += 1
 
     def dump_valdata(self, val_dir, spikes, feat, loc, rot, cat, mcat=None):
-        ''' dump validation data in npy files
-        '''
+        """ dump validation data in *.npy files
+        
+        Parameters:
+        -----------
+        val_dir : string
+            Path to the validation diretory where the data is saved to.
+        spikes : array_like
+            Spike data
+        feat : array_like
+            Spike features
+        loc : array_like
+            Locations of neuron somas.
+        rot : array_like
+            Array of neuron rotations.
+        cat : array_like
+            Array of neuron categories.
+        mcat : array_like (optional, default=None)
+            Morphological category of the neurons.
+        """
         if not os.path.isfile(join(val_dir, 'val_spikes.npy')):
             np.save(join(val_dir, 'val_spikes'), spikes)
             np.save(join(val_dir, 'val_feat'), feat)
@@ -1024,8 +1046,18 @@ class SpikeConvNet:
                 np.save(join(val_dir, 'val_mcat'), np.concatenate((np.load(join(val_dir, 'val_mcat.npy')), mcat)))
 
     def read_single_example(self,filename_queue):
-        ''' get a single example from filename queue
-        '''
+        """ get a single example from filename queue
+
+        Parameters:
+        -----------
+        filename_queue : TensorFlow Queue
+            TensorFlow filename queue to read data from.
+        
+        Returns:
+        --------
+        result : object
+            A result object with attributes loaded from a file in the queue.
+        """
         class NclassRecord(object):
             pass
         result = NclassRecord()
@@ -1059,9 +1091,21 @@ class SpikeConvNet:
 
 
     def inputs_fct(self,ddir,batch):
-        ''' Returns
-        feature_batch
-        label_batch
+        ''' Returns a training batch of the data
+        
+        Parameters:
+        -----------
+        ddir : string
+            Path to data directory.
+        batch : int
+            Batch size.
+
+        Returns:
+        --------
+        feature_batch : TensorFlow Tensor
+            Batch tensor of features.
+        mlabel_batch : TensorFlow Tensor
+            Batch tensor of labels
         '''
         # filenames
         filenames = [join(ddir,f) for f in os.listdir(ddir) if f.endswith('.csv')]
@@ -1074,10 +1118,11 @@ class SpikeConvNet:
         mlabel = read_input.mlabel
 
         # generate the batch
-        feature_batch, mlabel_batch = tf.train.shuffle_batch([features,mlabel],batch_size=batch,
-                                                        num_threads=2,
-                                                        capacity=65000,
-                                                        min_after_dequeue=30000)
+        feature_batch, mlabel_batch = tf.train.shuffle_batch([features,mlabel],
+                                                    batch_size=batch,
+                                                    num_threads=2,
+                                                    capacity=65000,
+                                                    min_after_dequeue=30000)
         return feature_batch, mlabel_batch
 
     def inference(self,xx):
@@ -1085,8 +1130,9 @@ class SpikeConvNet:
         Parameters:
         -----------
         xx: tensor, graph input
-        Return:
-        -------
+        
+        Returns:
+        --------
         pred: tensor, prediction
         '''
         if self.feat_type != '3d':
@@ -1176,19 +1222,21 @@ class SpikeConvNet:
         return y_conv
 
     def loss(self,logits,labels):
-        """Add L2Loss to all the trainable variables.
+        """Add L2 loss to all the trainable variables.
+        Additionally add a summary for "Loss" and "Loss/avg".
 
-        Add summary for "Loss" and "Loss/avg".
-        Args:
-        logits: Logits from inference().
-        labels: Labels from distorted_inputs or inputs(). 2-D tensor
-        of shape [batch_size,label_size]
+        Parameters:
+        -----------
+        logits : TensorFlow tensor
+            Logits from self.inference().
+        labels : TensorFlow Tensor
+            Labels from self.inputs_fct() of shape [batch_size,label_size]
 
         Returns:
-        Loss tensor of type float.
+        --------
+        Loss : TensorFlow Tensor
         """
         # Calculate the average cross entropy loss across the batch.
-        # labels = tf.cast(labels, tf.float64)
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
             logits=logits, labels=labels, name='cross_entropy_per_example')
         cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
@@ -1200,16 +1248,20 @@ class SpikeConvNet:
 
 
     def training(self,validation_run=None):
-        ''' train the network
-        '''
+        """ Train the network
+        
+        Parameters:
+        -----------
+        validation_run : int (optional, default None)
+            Number of validation run. If ``None``, it's treaten like zero, 
+            but no specification is added to training directory.
+        """
+
         if validation_run is not None:
             tmp_train_dir = join(self.tmp_data_dir,'train_'+str(validation_run))
         else:
             tmp_train_dir = join(self.tmp_data_dir,'train')
             validation_run = 0
-
-        # set graph-level random seed
-        # tf.set_random_seed(self.seed)
 
         global_step = tf.Variable(0, trainable=False)
 
@@ -1217,12 +1269,8 @@ class SpikeConvNet:
         train_features,train_classes = self.inputs_fct(tmp_train_dir, self.batch_size)
         # prediction
         logits = self.inference(train_features)
-        # cost:  Optimize L2 norm
-        # cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=train_classes))
-        # tf.summary.scalar('cross_entropy',cross_entropy)
         total_loss = self.loss(logits,train_classes)
 
-        # train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(cross_entropy)
         train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(total_loss)
 
         correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(train_classes, 1))
@@ -1259,20 +1307,23 @@ class SpikeConvNet:
                 sess.run(train_step,feed_dict={self.keep_prob: self.dropout_rate})
                 # Display logs per epoch step
                 if (epoch+1) % self.display_step == 0:
-                    # ce,train_accuracy,summary = sess.run([cross_entropy,accuracy,merged],feed_dict={self.keep_prob: 1.0})
-                    ce,train_accuracy,summary = sess.run([total_loss,accuracy,merged],feed_dict={self.keep_prob: 1.0})
-                    print("Step:", '%04d' % (epoch + 1), "training accuracy=", "{:.9f}".format(train_accuracy))
+                    ce,train_accuracy,summary = sess.run([total_loss,accuracy,\
+                                    merged],feed_dict={self.keep_prob: 1.0})
+                    print("Step:", '%04d' % (epoch + 1), "training accuracy=",\
+                          "{:.9f}".format(train_accuracy))
                     print('Elapsed time: ', time.time() - t_start)
                     train_writer.add_summary(summary,epoch)
                 if epoch+1 == self.training_epochs:
                     ce, train_accuracy, summary = sess.run([total_loss, accuracy, merged],
                                                            feed_dict={self.keep_prob: 1.0})
-                    print("Step:", '%04d' % (epoch + 1), "training accuracy=", "{:.9f}".format(train_accuracy))
+                    print("Step:", '%04d' % (epoch + 1), "training accuracy=",\
+                          "{:.9f}".format(train_accuracy))
                     self.acc_tr = train_accuracy
                     print('Elapsed time: ', time.time() - t_start)
                     # Save the model checkpoint periodically.
                     if self.save:
-                        checkpoint_path = join(self.model_path, 'train','run%d' % validation_run ,self.model_name +'.ckpt')
+                        checkpoint_path = join(self.model_path, 'train','run%d'\
+                                               % validation_run ,self.model_name +'.ckpt')
                         saver.save(sess, checkpoint_path ,global_step=epoch)
                         print("Model saved in file: %s" % checkpoint_path)
 
@@ -1286,15 +1337,22 @@ class SpikeConvNet:
             coord.join(threads)
 
         print("Optimization Finished!")
-        # training_cost = sess.run(cross_entropy,feed_dict={self.keep_prob: 1.0})
         training_cost = sess.run(total_loss,feed_dict={self.keep_prob: 1.0})
 
         tf.reset_default_graph()
         sess.close()
 
     def evaluate(self,validation_run=None):
-        ''' evaluate the network
-        '''
+        """ Evaluate the network
+
+        Parameters:
+        -----------
+        validation_run : int (optional, default None)
+            Number of validation run. If ``None``, it's treaten like zero, 
+            but no specification is added to validation directory.
+        """
+
+
         if validation_run is not None:
             curr_eval_dir = join(self.val_data_dir, 'eval_' + str(validation_run))
         else:
@@ -1372,14 +1430,11 @@ class SpikeConvNet:
         tf.reset_default_graph()
 
 
-    def final_evaluate(self):
-        ''' some final evaluation after all validation runs can be implemented here
-        '''
-        pass
-
-
     def save_meta_model(self):
-        ''' save meta data in old fashioned format'''
+        """ Save model data and results. This function creates
+            `model_info.yaml` and `results.pkl`.
+
+        """
         # Save meta_info yaml
         print('Saving: ', self.model_path)
         with open(join(self.model_path, 'model_info.yaml'), 'w') as f:
@@ -1429,7 +1484,7 @@ class SpikeConvNet:
                          }
             yaml.dump(data_yaml, f, default_flow_style=False)
 
-        # create results csv
+        # create results pkl
         if self.validation_runs > 1:
             for v in range(self.validation_runs):
                 n_obs = len(self.guessed[v])
@@ -1448,7 +1503,7 @@ class SpikeConvNet:
                 val_run_vec = [v+1] * n_obs
 
                 cat = [self.cell_dict[cc] for cc in self.cat[v]]
-                bin_cat = self.get_binary_cat(cat)
+                bin_cat = get_binary_cat(cat,self.exc_categories,self.inh_categories)
                 pred_cat = [self.pred_dict[cc] for cc in self.guessed[v]]
                 loc = self.loc[v]
                 rot = self.rot[v]
@@ -1486,7 +1541,7 @@ class SpikeConvNet:
             val_run_vec = [0] * n_obs
 
             cat = [self.cell_dict[cc] for cc in self.cat]
-            bin_cat = self.get_binary_cat(cat)
+            bin_cat = get_binary_cat(cat,self.exc_categories,self.inh_categories)
             pred_cat = [self.pred_dict[cc] for cc in self.guessed]
             loc = self.loc
             rot = self.rot
@@ -1509,17 +1564,14 @@ class SpikeConvNet:
             filen.close()
 
 
-    def get_binary_cat(self, categories):
-        binary_cat = []
-        for i, cat in enumerate(categories):
-            if cat in self.exc_categories:
-                binary_cat.append('EXCIT')
-            elif cat in self.inh_categories:
-                binary_cat.append('INHIB')
-
-        return np.array(binary_cat, dtype=str)
-
     def get_binary_cat_idx(self, categories):
+        """ Get binary category index
+        
+        Parameters:
+        -----------
+        categories : list
+            List of cell categories.
+        """
         binary_cat = []
         for i, cat in enumerate(categories):
             if cat in self.exc_categories:
@@ -1530,11 +1582,22 @@ class SpikeConvNet:
         return np.array(binary_cat)
 
     def get_mtype_cat_idx(self, categories, classes):
+        """ Get m-type category index
+        
+        Parameters:
+        -----------
+        categories : list
+            List of cell categories to get an index for.
+        classes : list
+            List of m-type classes.
+        """
         m_cat = [int(np.argwhere(np.array(classes)==cat)) for cat in categories]
         return np.array(m_cat)
 
     def remondis(self):
-        ''' clean up '''
+        ''' Cleaning up. 
+            Remove temporary directories.
+        '''
         if self.tmp_data_dir.split('/')[-1].startswith('tmp'):
             shutil.rmtree(self.tmp_data_dir)
         else:
@@ -1546,10 +1609,15 @@ if __name__ == '__main__':
         COMMAND-LINE 
         -f filename
         -feat feature type
+        -modelout number of model to hold out
         -val validation
         -cl class type
         -cn cellnames
+        -n number of training epochs
         -s size
+        -tcn training cell names
+        -vcn validation cell names
+        -seed seed
     '''
 
     if '-f' in sys.argv:
@@ -1608,12 +1676,20 @@ if __name__ == '__main__':
     else:
         seed = int(2308)
     if len(sys.argv) == 1:
-        print('Arguments: \n   -f full-path\n   -feat feature type: AW - FW - AFW - 3d\n   ' \
-              '-val validation: holdout - k-fold - hold-model-out - k-fold-model\n   ' \
-              '-cn cellnames: all - filename\n   -tcn train cellnames file\n   -vcn validation cellnames file\n   ' \
-              '-cl classification: binary - m-type\n   ' \
-              '-s  size: xs - s - m - l - xl\n   -modelout model to hold out  -seed random seed (integer)')
+        print('Arguments: \n   -f full-path\n'\
+              '-feat feature type: AW - FW - AFW - 3d\n' \
+              '-val validation: holdout,k-fold,hold-model-out,k-fold-model\n'\
+              '-cn cellnames: all - filename\n '\
+              '-tcn train cellnames file\n '\
+              '-vcn validation cellnames file\n' \
+              '-cl classification: binary - m-type\n' \
+              '-s  size: xs - s - m - l - xl\n'\
+              '-modelout model to hold out'\
+              '-seed random seed (integer)')
     else:
-        cv = SpikeConvNet(train=True, save=True, spike_folder=spike_folder, feat_type=feat_type, class_type=class_type,
-                          val_type=val_type, cellnames=cell_names, size=size, model_out=model_out, nsteps=nsteps,
-                          train_cell_names=train_cell_names, val_cell_names=val_cell_names,seed=seed)
+        cv = SpikeConvNet(train=True, save=True, spike_folder=spike_folder,\
+                          feat_type=feat_type, class_type=class_type,\
+                          val_type=val_type, cellnames=cell_names, size=size,\
+                          model_out=model_out, nsteps=nsteps,\
+                          train_cell_names=train_cell_names,\
+                          val_cell_names=val_cell_names,seed=seed)

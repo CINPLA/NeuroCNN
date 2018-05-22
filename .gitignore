@@ -10,7 +10,3 @@ figures/
 mods/
 logs/
 spikes/
-base_examples_tetrodes/
-yaml_to_yml.py
-compute_soma_Im.py
-.idea

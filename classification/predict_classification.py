@@ -32,41 +32,8 @@ from tools import *
 from tftools import *
 
 
-def load_spikes(spike_folder):
-    print("Loading spike data ...")
-    spikelist = [f for f in os.listdir(spike_folder) if f.startswith('e_spikes')]
-    loclist = [f for f in os.listdir(spike_folder) if f.startswith('e_pos')]
-    rotlist = [f for f in os.listdir(spike_folder) if f.startswith('e_rot')]
-
-    spikes_list = []
-    loc_list = []
-    rot_list = []
-    cat_list = []
-
-    spikelist = sorted(spikelist)
-    loclist = sorted(loclist)
-    rotlist = sorted(rotlist)
-
-
-    for idx, f in enumerate(spikelist):
-        samples = int(f.split('_')[2])
-        samples_to_read = samples
-        print('loading ', samples_to_read, ' samples for cell type: ', f)
-        spikes = np.load(join(spike_folder, f))  # [:spikes_per_cell, :, :]
-        spikes_list.extend(spikes[:samples_to_read])
-        locs = np.load(join(spike_folder, loclist[idx]))  # [:spikes_per_cell, :]
-        loc_list.extend(locs[:samples_to_read])
-        rots = np.load(join(spike_folder, rotlist[idx]))  # [:spikes_per_cell, :]
-        rot_list.extend(rots[:samples_to_read])
-        category = f.split('_')[3] # [:spikes_per_cell, :]
-        cat_list.extend([category] * samples_to_read)
-
-
-    print("Done loading spike data ...")
-    return np.array(spikes_list), np.array(loc_list), np.array(rot_list), np.array(cat_list)
-
-
 class Prediction:
+    
     def __init__(self, model_path=None, spike_folder=None):
 
         self.model_path = os.path.normpath(model_path)
@@ -178,8 +145,11 @@ class Prediction:
         tf.reset_default_graph()
 
         print('\nClassifying neurons with ', self.model_type, ' model EAP')
+        spikefiles = [f for f in os.listdir(self.spike_folder) if 'spikes' in f]
+        cell_names = ['_'.join(ss.split('_')[3:-1]) for ss in spikefiles]
+        self.other_spikes, self.other_loc, self.other_rot, other_cat, oetype,\
+            omid, oloaded_cat = load_EAP_data(spike_folder,cell_names,self.all_categories)
 
-        self.other_spikes, self.other_loc, self.other_rot, other_cat = load_spikes(spike_folder)
         self.other_features = self.return_features(self.other_spikes)
         self.other_cat = []
         other_features_tf = tf.constant(self.other_features, dtype=np.float32)
@@ -293,10 +263,12 @@ class Prediction:
 
     def inference(self, xx):
         ''' infer network prediction
+
         Parameters:
         -----------
         xx: tensor, graph input
-        Return:
+
+        Returns:
         -------
         pred: tensor, prediction
         '''

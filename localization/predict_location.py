@@ -31,37 +31,6 @@ if os.path.exists(join(base_folder,'config.py')):
 from tools import *
 from tftools import *
 
-
-def load_spikes(spike_folder):
-    print("Loading spike data ...")
-    spikelist = [f for f in os.listdir(spike_folder) if f.startswith('e_spikes')]
-    loclist = [f for f in os.listdir(spike_folder) if f.startswith('e_pos')]
-    rotlist = [f for f in os.listdir(spike_folder) if f.startswith('e_rot')]
-
-    spikes_list = []
-    loc_list = []
-    rot_list = []
-
-    spikelist = sorted(spikelist)
-    loclist = sorted(loclist)
-    rotlist = sorted(rotlist)
-
-
-    for idx, f in enumerate(spikelist):
-        samples = int(f.split('_')[2])
-        samples_to_read = samples
-        print('loading ', samples_to_read, ' samples for cell type: ', f)
-        spikes = np.load(join(spike_folder, f))  # [:spikes_per_cell, :, :]
-        spikes_list.extend(spikes[:samples_to_read])
-        locs = np.load(join(spike_folder, loclist[idx]))  # [:spikes_per_cell, :]
-        loc_list.extend(locs[:samples_to_read])
-        rots = np.load(join(spike_folder, rotlist[idx]))  # [:spikes_per_cell, :]
-        rot_list.extend(rots[:samples_to_read])
-
-    print("Done loading spike data ...")
-    return np.array(spikes_list), np.array(loc_list), np.array(rot_list)
-
-
 class Prediction:
     def __init__(self, loc_model_path=None, spike_folder=None):
 
@@ -174,7 +143,10 @@ class Prediction:
             tf.reset_default_graph()
 
         print('\nLocalizing neurons with ', self.model_type, ' model EAP')
-        self.other_spikes, self.other_loc, self.other_rot = load_spikes(spike_folder)
+        spikefiles = [f for f in os.listdir(self.spike_folder) if 'spikes' in f]
+        cell_names = ['_'.join(ss.split('_')[3:-1]) for ss in spikefiles]
+        self.other_spikes, self.other_loc, self.other_rot, ocat, oetype, omid,\
+            oloaded_cat = load_EAP_data(spike_folder,cell_names,self.all_categories)
         self.other_features = self.return_features(self.other_spikes)
 
         other_features_tf = tf.constant(self.other_features, dtype=np.float32)
