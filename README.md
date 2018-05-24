@@ -1,4 +1,4 @@
-o# Neuro-CNN: Convolutional Neural Networks for neural localization and classification
+# Neuro-CNN: Convolutional Neural Networks for neural localization and classification
 
 Neuro-CNN is a project for using machine learning, in particular Convolutional Neural Networks (CNN), to localize neurons in
 3d and to classify their neural types from the Extracellular Action Potential (EAP) on Multi-Electrode Arrays (MEA).
