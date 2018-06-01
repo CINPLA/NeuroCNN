@@ -145,7 +145,7 @@ class Prediction:
         tf.reset_default_graph()
 
         print('\nClassifying neurons with ', self.model_type, ' model EAP')
-        spikefiles = [f for f in os.listdir(self.spike_folder) if 'spikes' in f]
+        spikefiles = [f for f in os.listdir(spike_folder) if 'spikes' in f]
         cell_names = ['_'.join(ss.split('_')[3:-1]) for ss in spikefiles]
         self.other_spikes, self.other_loc, self.other_rot, other_cat, oetype,\
             omid, oloaded_cat = load_EAP_data(spike_folder,cell_names,self.all_categories)

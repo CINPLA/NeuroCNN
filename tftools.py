@@ -1,5 +1,6 @@
 # helper functions for tensorflow
 
+import re
 import tensorflow as tf
 
 def weight_variable(shape, name, seed):
