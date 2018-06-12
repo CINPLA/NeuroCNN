@@ -31,19 +31,18 @@ if os.path.exists(join(base_folder,'config.py')):
 from tools import *
 from tftools import *
 
+import ipdb
+
 class Prediction:
     def __init__(self, loc_model_path=None, spike_folder=None):
 
         self.model_path = os.path.abspath(loc_model_path)
-        self.model_type = os.path.abspath(spike_folder).split(os.sep)[-3]
         model_info = [f for f in os.listdir(self.model_path) if '.yaml' in f or '.yml' in f][0]
         with open(join(self.model_path, model_info), 'r') as f:
             self.model_info = yaml.load(f)
         # open 1 yaml file and save pitch
         self.all_categories = ['BP', 'BTC', 'ChC', 'DBC', 'LBC', 'MC', 'NBC',
                                'NGC', 'SBC', 'STPC', 'TTPC1', 'TTPC2', 'UTPC']
-
-        remove_BP_NGC = True
 
         self.cell_dict = {}
         for cc in self.all_categories:
@@ -89,6 +88,8 @@ class Prediction:
             for cc in self.all_categories:
                 self.cell_dict.update({int(np.argwhere(np.array(self.all_categories) == cc)): cc})
             val_data = True
+            cat_strings = np.array([self.cell_dict[cc] for cc in self.cat])
+
 
         MEAname = self.model_info['General']['electrode name']
         MEAdims = self.model_info['General']['MEA dimension']
@@ -109,11 +110,7 @@ class Prediction:
         tf.reset_default_graph()
 
         if val_data:
-            print('\nLocalizing with on validation BBP model EAP')
-
-            self.pred_loc_n = np.zeros((len(self.cat), 3))
-            self.err_n = np.zeros(len(self.cat))
-            self.err_dim_n = np.zeros((len(self.cat), 3))
+            print('\nLocalizing neurons from validation data of CNN model')
 
             test_features_tf = tf.constant(self.features, dtype=np.float32)
             # prediction
@@ -142,53 +139,95 @@ class Prediction:
 
             tf.reset_default_graph()
 
-        print('\nLocalizing neurons with ', self.model_type, ' model EAP')
-        spikefiles = [f for f in os.listdir(spike_folder) if 'spikes' in f]
-        cell_names = ['_'.join(ss.split('_')[3:-1]) for ss in spikefiles]
-        self.other_spikes, self.other_loc, self.other_rot, ocat, oetype, omid,\
-            oloaded_cat = load_EAP_data(spike_folder,cell_names,self.all_categories)
-        self.other_features = self.return_features(self.other_spikes)
+            print('\n{0:*^60}\n{1:*^60}\n{2:*^60}\n{3:*^60}'.format(
+    '','   RESULTS   ',' Accuracies for validation data of trained CNN ',''))
+            print('Data from %s' % '/'.join(self.val_data_dir.split(os.sep)[-2:]))
+            
+            print('\n'+60*'=')
+            print('Average validation error: %.2f +- %.2f um' % 
+                  (np.mean(err),np.std(err)))
+            print(60*'=')
 
-        other_features_tf = tf.constant(self.other_features, dtype=np.float32)
-        other_pred_loc = self.inference(other_features_tf)
+            print('\n{0:*^60}\n'.format(' Dimension specific results '))
+            print('Mean error in x dimension: %.2f um' % err_x.mean())
+            print('Std of error in x dimension: %.2f um' % err_x.std())
+            print('Mean error in y dimension: %.2f um' % err_y.mean())
+            print('Std of error in y dimension: %.2f um' % err_y.std())
+            print('Mean error in z dimension: %.2f um' % err_z.mean())
+            print('Std of error in z dimension: %.2f um' % err_z.std())
 
-        with tf.Session() as sess:
-            saver = tf.train.Saver()
-            ckpt = tf.train.get_checkpoint_state(join(self.model_path, 'train', 'run%d' % validation_run))
-            if ckpt and ckpt.model_checkpoint_path:
-                relative_model_path_idx = ckpt.model_checkpoint_path.index('models/')
-                relative_model_path = join(data_dir, 'localization',
-                                           ckpt.model_checkpoint_path[relative_model_path_idx:])
-                saver.restore(sess, relative_model_path)
-                global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
-            else:
-                print('No checkpoint file found')
-                return
+            print('\n{0:*^60}\n'.format(' Cell specific results '))
+            for cc in self.cell_dict.values():
+                ids = np.argwhere(cat_strings==cc)
+                print('Error for cells of type %s: %.2f +- %.2f um' 
+                      % (cc, err[ids].mean(),err[ids].std()))
 
-            other_pred = sess.run(other_pred_loc, feed_dict={self.keep_prob: 1.0})
-            other_err = np.array([np.linalg.norm(other_pred[e, :] - self.other_loc[e, :])
-                                  for e in range(other_pred.shape[0])])
-            other_err_x = np.array([np.linalg.norm(other_pred[e, 0] - self.other_loc[e, 0])
-                                    for e in range(other_pred.shape[0])])
-            other_err_y = np.array([np.linalg.norm(other_pred[e, 1] - self.other_loc[e, 1])
-                                    for e in range(other_pred.shape[0])])
-            other_err_z = np.array([np.linalg.norm(other_pred[e, 2] - self.other_loc[e, 2])
-                                    for e in range(other_pred.shape[0])])
-            other_err_dim = np.array([err_x, err_y, err_z]).transpose()
+            print('\n{0:*^60}\n'.format(' END RESULTS '))
 
-        self.pred_loc_n = pred
-        self.err_n = err
-        self.err_dim_n = err_dim
+        if spike_folder is not None:
+            self.model_type = os.path.abspath(spike_folder).split(os.sep)[-3]
+            print('\nLocalizing neurons with ', self.model_type, ' model EAPs from spike folder:\n  ')
+            print('%s\n' % spike_folder)
+            spikefiles = [f for f in os.listdir(spike_folder) if 'spikes' in f]
+            cell_names = ['_'.join(ss.split('_')[3:-1]) for ss in spikefiles]
+            self.other_spikes, self.other_loc, self.other_rot, ocat, oetype, omid,\
+                oloaded_cat = load_EAP_data(spike_folder,cell_names,self.all_categories)
+            self.other_features = self.return_features(self.other_spikes)
 
-        self.other_pred_loc_n = other_pred
-        self.other_err_n = other_err
-        self.other_err_dim_n = other_err_dim
+            other_features_tf = tf.constant(self.other_features, dtype=np.float32)
+            other_pred_loc = self.inference(other_features_tf)
 
-        print('\n\nAverage validation error: ', np.mean(self.err_n), ' +- ', np.std(self.err_n))
-        print('\nAverage ', self.model_type, ' error: ', np.mean(self.other_err_n), ' +- ', np.std(self.other_err_n))
+            with tf.Session() as sess:
+                saver = tf.train.Saver()
+                ckpt = tf.train.get_checkpoint_state(join(self.model_path, 'train', 'run%d' % validation_run))
+                if ckpt and ckpt.model_checkpoint_path:
+                    relative_model_path_idx = ckpt.model_checkpoint_path.index('models/')
+                    relative_model_path = join(data_dir, 'localization',
+                                               ckpt.model_checkpoint_path[relative_model_path_idx:])
+                    saver.restore(sess, relative_model_path)
+                    global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
+                else:
+                    print('No checkpoint file found')
+                    return
 
-        tf.reset_default_graph()
+                other_pred = sess.run(other_pred_loc, feed_dict={self.keep_prob: 1.0})
+                other_err = np.array([np.linalg.norm(other_pred[e, :] - self.other_loc[e, :])
+                                      for e in range(other_pred.shape[0])])
+                other_err_x = np.array([np.linalg.norm(other_pred[e, 0] - self.other_loc[e, 0])
+                                        for e in range(other_pred.shape[0])])
+                other_err_y = np.array([np.linalg.norm(other_pred[e, 1] - self.other_loc[e, 1])
+                                        for e in range(other_pred.shape[0])])
+                other_err_z = np.array([np.linalg.norm(other_pred[e, 2] - self.other_loc[e, 2])
+                                        for e in range(other_pred.shape[0])])
+                other_err_dim = np.array([err_x, err_y, err_z]).transpose()
 
+
+            tf.reset_default_graph()
+
+            print('\n{0:*^60}\n{1:*^60}\n{2:*^60}\n{3:*^60}'.format(
+                '','   RESULTS   ',' Accuracies for data from spike folder',''))
+            print('Data from %s' % spike_folder)
+            
+            print('\n'+60*'=')
+            print('Average error: %.2f +- %.2f um' % 
+                  (np.mean(other_err),np.std(other_err)))
+            print(60*'=')
+
+            print('\n{0:*^60}\n'.format(' Dimension specific results '))
+            print('Mean error in x dimension: %.2f um' % other_err_x.mean())
+            print('Std of error in x dimension: %.2f um' % other_err_x.std())
+            print('Mean error in y dimension: %.2f um' % other_err_y.mean())
+            print('Std of error in y dimension: %.2f um' % other_err_y.std())
+            print('Mean error in z dimension: %.2f um' % other_err_z.mean())
+            print('Std of error in z dimension: %.2f um' % other_err_z.std())
+
+            print('\n{0:*^60}\n'.format(' Cell specific results '))
+            for cc in np.unique(ocat):
+                ids = np.argwhere(ocat==cc)
+                print('Error for cells of type %s: %.2f +- %.2f um' 
+                      % (cc, other_err[ids].mean(),other_err[ids].std()))
+
+            print('\n{0:*^60}\n'.format(' END RESULTS '))
 
 
     def return_features(self, spikes):
@@ -283,171 +322,6 @@ class Prediction:
         return y_conv
 
 
-    def evaluate(self, validation_run=None):
-        ''' evaluate the network
-        '''
-        if validation_run is not None:
-            curr_eval_dir = join(self.val_data_dir, 'eval_' + str(validation_run))
-        else:
-            curr_eval_dir = self.val_data_dir
-            validation_run = 0
-        checkpoint_path = join(self.model_path, 'train', 'run%d' % validation_run, self.model_name + '.ckpt')
-
-        # get data for testing
-        if self.classification == 'binary':
-            test_spikes, test_features, test_loc, test_rot, test_cat, test_mcat = load_validation_data(curr_eval_dir,
-                                                                                                       load_mcat=True)
-        else:
-            test_spikes, test_features, test_loc, test_rot, test_cat = load_validation_data(curr_eval_dir)
-        test_features_tf = tf.constant(test_features, dtype=np.float32)
-        test_cat_tf = tf.one_hot(test_cat, depth=self.num_categories, dtype=np.int64)
-        # prediction
-        test_pred = self.inference(test_features_tf)
-        true = tf.argmax(test_cat_tf, 1)
-        guessed = tf.argmax(test_pred, 1)
-        correct_prediction = tf.equal(guessed, true)
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-        tf.summary.scalar('accuracy', accuracy)
-
-        saver = tf.train.Saver()
-
-        # cost:  Optimize L2 norm
-        test_cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=test_pred,
-                                                                                    labels=test_cat_tf))
-        tf.summary.scalar('cross_entropy', test_cross_entropy)
-
-        # Merge all the summaries
-        merged_sum = tf.summary.merge_all()
-
-        eval_writer = tf.summary.FileWriter(join(self.model_path, 'eval', 'run%d' % validation_run))
-
-        with tf.Session() as sess:
-            ckpt = tf.train.get_checkpoint_state(join(self.model_path, 'train', 'run%d' % validation_run))
-            if ckpt and ckpt.model_checkpoint_path:
-                relative_model_path_idx = ckpt.model_checkpoint_path.index('models/')
-                relative_model_path = join(data_dir, 'classification',
-                                           ckpt.model_checkpoint_path[relative_model_path_idx:])
-                saver.restore(sess, relative_model_path)
-                global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
-            else:
-                print('No checkpoint file found')
-                return
-
-            # Start the queue runners.
-            coord = tf.train.Coordinator()
-            try:
-                threads = []
-                for qr in tf.get_collection(tf.GraphKeys.QUEUE_RUNNERS):
-                    threads.extend(qr.create_threads(sess, coord=coord, daemon=True,
-                                                     start=True))
-
-                acc, guess, summary = sess.run([accuracy, guessed, merged_sum], feed_dict={self.keep_prob: 1.0})
-                print("Validation accuracy=", "{:.9f}".format(acc))
-
-                self.accuracies.append(acc)
-                self.guessed.append(guess)
-                self.loc.append(test_loc)
-                self.spikes.append(test_spikes)
-                if self.classification == 'binary':
-                    self.cat.append(test_mcat)
-                else:
-                    self.cat.append(test_cat)
-                self.rot.append(test_rot)
-
-                eval_writer.add_summary(summary, global_step)
-            except Exception as e:  # pylint: disable=broad-except
-                coord.request_stop(e)
-            finally:
-                # When done, ask the threads to stop.
-                coord.request_stop()
-                # And wait for them to actually do it.
-                coord.join(threads)
-
-        tf.reset_default_graph()
-
-    def save_results(self, model_path):
-        n_obs = len(self.predicted_cat)
-
-        class_feat_vec = [self.class_feat_type] * n_obs
-        loc_feat_vec = [self.loc_feat_type] * n_obs
-        cs_feat_vec = [self.cs_feat_type] * n_obs
-        rot_vec = [self.class_rotation_type] * n_obs
-        elecname_vec = [self.electrode_name] * n_obs
-        px_vec = [self.n_points] * n_obs
-        mea_ydim_vec = [self.mea_dim[0]] * n_obs
-        mea_zdim_vec = [self.mea_dim[1]] * n_obs
-        pitch_ydim_vec = [self.pitch[0]] * n_obs
-        pitch_zdim_vec = [self.pitch[1]] * n_obs
-        class_size_vec = [self.class_size] * n_obs
-        loc_size_vec = [self.loc_size] * n_obs
-        cs_size_vec = [self.cs_size] * n_obs
-        class_vec = [self.classification] * n_obs
-        allcell_vec = ['allcells'] * n_obs
-        cascade_vec = ['cascade'] * n_obs
-
-        cat = [self.cell_dict[cc] for cc in self.cat]
-        pred_cat = self.predicted_cat
-        bin_cat = self.get_binary_cat(cat)
-        loc = self.loc
-        rot = self.rot
-        preds_n = self.pred_loc_n
-        errors_n = self.err_n
-        errors_dim_n = self.err_dim_n
-        preds_cs = self.pred_loc_cs
-        errors_cs = self.err_cs
-        errors_dim_cs = self.err_dim_cs
-
-        d_obs_allcells = {'cell_type': cat, 'binary_cat': bin_cat, 'predicted_cat': pred_cat,
-                 'x': loc[:, 0], 'y': loc[:, 1], 'z': loc[:, 2],
-                 'rot_x': rot[:, 0], 'rot_y': rot[:, 2], 'rot_z': rot[:, 2],
-                 'pred_x': preds_n[:, 0], 'pred_y': preds_n[:, 1], 'pred_z': preds_n[:, 2],
-                 'err': errors_n, 'err_x': errors_dim_n[:, 0], 'err_y': errors_dim_n[:, 1],
-                 'err_z': errors_dim_n[:, 2],
-                 'class_feat_type': class_feat_vec, 'loc_feat_type': loc_feat_vec, 'cs_feat_type': cs_feat_vec,
-                 'rotation_type': rot_vec, 'px': px_vec, 'y_pitch': pitch_ydim_vec, 'z_pitch': pitch_zdim_vec,
-                 'MEA y dimension': mea_ydim_vec, 'MEA z dimension': mea_zdim_vec, 'elec_name': elecname_vec,
-                 'class_size': class_size_vec, 'loc_size': loc_size_vec, 'cs_size': cs_size_vec,
-                 'classification': class_vec, 'method': allcell_vec,
-                 'id': np.arange(n_obs)}
-        d_obs_cs = {'cell_type': cat, 'binary_cat': bin_cat, 'predicted_cat': pred_cat,
-                      'x': loc[:, 0], 'y': loc[:, 1], 'z': loc[:, 2],
-                      'rot_x': rot[:, 0], 'rot_y': rot[:, 2], 'rot_z': rot[:, 2],
-                      'pred_x': preds_cs[:, 0], 'pred_y': preds_cs[:, 1], 'pred_z': preds_cs[:, 2],
-                      'err': errors_cs, 'err_x': errors_dim_cs[:, 0],
-                      'err_y': errors_dim_cs[:, 1], 'err_z': errors_dim_cs[:, 2],
-                      'class_feat_type': class_feat_vec, 'loc_feat_type': loc_feat_vec, 'cs_feat_type': cs_feat_vec,
-                      'rotation_type': rot_vec, 'px': px_vec, 'y_pitch': pitch_ydim_vec, 'z_pitch': pitch_zdim_vec,
-                      'MEA y dimension': mea_ydim_vec, 'MEA z dimension': mea_zdim_vec, 'elec_name': elecname_vec,
-                      'class_size': class_size_vec, 'loc_size': loc_size_vec, 'cs_size': cs_size_vec,
-                      'classification': class_vec, 'method': cascade_vec,
-                      'id': np.arange(n_obs)}
-
-
-        results_dir = join(model_path, 'results')
-        if not os.path.isdir(results_dir):
-            os.makedirs(results_dir)
-
-        # df_obs.to_csv(join(results_dir, 'results.csv'))
-        filen = open(join(results_dir, 'results_cascade_' + self.classification + '_'
-                          + self.class_feat_type + '_allcells.pkl'), 'wb')
-        pickle.dump(d_obs_allcells, filen, protocol=2)
-        filen.close()
-        # df_obs.to_csv(join(results_dir, 'results.csv'))
-        filen = open(join(results_dir, 'results_cascade_' + self.classification + '_'
-                          + self.class_feat_type + '_cs.pkl'), 'wb')
-        pickle.dump(d_obs_cs, filen, protocol=2)
-        filen.close()
-
-
-    def get_binary_cat(self, categories):
-        binary_cat = []
-        for i, cat in enumerate(categories):
-            if cat in self.exc_categories:
-                binary_cat.append('EXCIT')
-            elif cat in self.inh_categories:
-                binary_cat.append('INHIB')
-
-        return np.array(binary_cat, dtype=str)
 
 
 if __name__ == '__main__':
@@ -463,6 +337,8 @@ if __name__ == '__main__':
     if '-val' in sys.argv:
         pos = sys.argv.index('-val')
         spikes = sys.argv[pos + 1]
+    else:
+        spikes=None
     if len(sys.argv) == 1:
         print('Arguments: \n   -mod  CNN model\n   -val  validation spikes')
     elif '-mod' not in sys.argv:
