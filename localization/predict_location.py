@@ -31,8 +31,6 @@ if os.path.exists(join(base_folder,'config.py')):
 from tools import *
 from tftools import *
 
-import ipdb
-
 class Prediction:
     def __init__(self, loc_model_path=None, spike_folder=None):
 

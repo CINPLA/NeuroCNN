@@ -33,11 +33,9 @@ from tftools import *
 
 
 class Prediction:
-    
     def __init__(self, model_path=None, spike_folder=None):
 
         self.model_path = os.path.normpath(model_path)
-        self.model_type = os.path.normpath(spike_folder).split(os.sep)[-3]
         model_info = [f for f in os.listdir(self.model_path) if '.yaml' in f or '.yml' in f][0]
         with open(join(self.model_path, model_info), 'r') as f:
             self.model_info = yaml.load(f)
@@ -84,16 +82,18 @@ class Prediction:
         validation_run = 0
         if os.path.isdir(self.val_data_dir):
             if self.classification == 'binary':
-                self.spikes, self.features, self.loc, self.rot, self.cat, self.mcat = load_validation_data(self.val_data_dir,
-                                                                                                 load_mcat=True)
+                self.spikes, self.features, self.loc, self.rot, self.cat, self.mcat = \
+                        load_validation_data(self.val_data_dir, load_mcat=True)
             else:
                 self.spikes, self.features, self.loc, self.rot, self.cat, = load_validation_data(self.val_data_dir)
+                self.mcat = self.cat
             num_spikes = len(self.cat)
 
             self.cell_dict = {}
             for cc in self.all_categories:
                 self.cell_dict.update({int(np.argwhere(np.array(self.all_categories) == cc)): cc})
             val_data = True
+            mcat_strings = np.array([self.cell_dict[cc] for cc in self.mcat])
 
         MEAname = self.model_info['General']['electrode name']
         MEAdims = self.model_info['General']['MEA dimension']
@@ -115,7 +115,7 @@ class Prediction:
         tf.reset_default_graph()
 
         if val_data:
-            print('\nClassifying on validation BBP model EAP')
+            print('\nClassifying on validation data from trainel CNN model')
             test_features_tf = tf.constant(self.features, dtype=np.float32)
             test_cat_tf = tf.one_hot(self.cat, depth=self.num_categories, dtype=np.int64)
             # prediction
@@ -138,59 +138,94 @@ class Prediction:
                     return
 
                 accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-
+                
                 self.acc, self.guess = sess.run([accuracy, guessed], feed_dict={self.keep_prob: 1.0})
-                print("Validation accuracy=", "{:.9f}".format(self.acc))
+
+            tf.reset_default_graph()
+            # pred_cat = [self.pred_dict[cc] for cc in self.guessed[v]]
+
+            print('\n{0:*^60}\n{1:*^60}\n{2:*^60}\n{3:*^60}'.format(
+    '','   RESULTS   ',' Accuracies for validation data of trained CNN ',''))
+            print('Data from %s' % '/'.join(self.val_data_dir.split(os.sep)[-2:]))
+            
+            print('\n'+60*'=')
+            print('Average validation accuracy: %.2f %%' % (100.*self.acc))
+            print(60*'=')
+
+            print('\n{0:*^60}\n'.format(' Cell specific results '))
+            for cc in self.cell_dict.values():
+                ids = np.argwhere(mcat_strings==cc)
+                nncat = len(ids)
+                ccacc = float(len(np.where(self.guess[ids]==self.cat[ids])[0]))/nncat
+                print('Accuracy for cells of type %s: %.2f %%' 
+                      % (cc, 100*ccacc))
+
+            print('\n{0:*^60}\n'.format(' END RESULTS '))
+
+
+        if spike_folder is not None:
+            self.model_type = os.path.normpath(spike_folder).split(os.sep)[-3]
+            print('\nClassifying neurons with ', self.model_type, ' model EAPs from spike folder:\n')
+            print('%s\n' % spike_folder)
+            spikefiles = [f for f in os.listdir(spike_folder) if 'spikes' in f]
+            cell_names = ['_'.join(ss.split('_')[3:-1]) for ss in spikefiles]
+            self.other_spikes, self.other_loc, self.other_rot, other_cat, oetype,\
+                omid, oloaded_cat = load_EAP_data(spike_folder,cell_names,self.all_categories)
+
+            self.other_features = self.return_features(self.other_spikes)
+            self.other_cat = []
+            other_features_tf = tf.constant(self.other_features, dtype=np.float32)
+            for c in other_cat:
+                if 'L5b' in c or c in self.exc_categories:
+                    self.other_cat.append(0)
+                else:
+                    self.other_cat.append(1)
+            self.other_cat = np.array(self.other_cat)
+
+            other_cat_tf = tf.one_hot(self.other_cat, depth=self.num_categories, dtype=np.int64)
+            # prediction
+            test_pred = self.inference(other_features_tf)
+            true = tf.argmax(other_cat_tf, 1)
+            guessed = tf.argmax(test_pred, 1)
+            correct_prediction = tf.equal(guessed, true)
+
+            with tf.Session() as sess:
+                saver = tf.train.Saver()
+                ckpt = tf.train.get_checkpoint_state(join(self.model_path, 'train', 'run%d' % validation_run))
+                if ckpt and ckpt.model_checkpoint_path:
+                    relative_model_path_idx = ckpt.model_checkpoint_path.index('models/')
+                    relative_model_path = join(data_dir, 'classification',
+                                               ckpt.model_checkpoint_path[relative_model_path_idx:])
+                    saver.restore(sess, relative_model_path)
+                    global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
+                else:
+                    print('No checkpoint file found')
+                    return
+
+
+                accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
+
+                self.other_acc, self.other_guess = sess.run([accuracy, guessed], feed_dict={self.keep_prob: 1.0})
+
+            print('\n{0:*^60}\n{1:*^60}\n{2:*^60}\n{3:*^60}'.format(
+    '','   RESULTS   ',' Accuracies for data from spike folder ',''))
+            print('Data from %s' % spike_folder)
+            
+            print('\n'+60*'=')
+            print('Average accuracy: %.2f %%' % (100.*self.other_acc))
+            print(60*'=')
+
+            print('\n{0:*^60}\n'.format(' Cell specific results '))
+            for cc in np.unique(other_cat):
+                ids = np.argwhere(other_cat==cc)
+                nncat = len(ids)
+                ccacc = float(len(np.where(self.other_guess[ids]==self.other_cat[ids])[0]))/nncat
+                print('Accuracy for cells of type %s: %.2f %%' 
+                      % (cc, 100*ccacc))
+
+            print('\n{0:*^60}\n'.format(' END RESULTS '))
 
         tf.reset_default_graph()
-
-        print('\nClassifying neurons with ', self.model_type, ' model EAP')
-        spikefiles = [f for f in os.listdir(spike_folder) if 'spikes' in f]
-        cell_names = ['_'.join(ss.split('_')[3:-1]) for ss in spikefiles]
-        self.other_spikes, self.other_loc, self.other_rot, other_cat, oetype,\
-            omid, oloaded_cat = load_EAP_data(spike_folder,cell_names,self.all_categories)
-
-        self.other_features = self.return_features(self.other_spikes)
-        self.other_cat = []
-        other_features_tf = tf.constant(self.other_features, dtype=np.float32)
-        for c in other_cat:
-            if 'L5b' in c or 'EXCIT' == c:
-                self.other_cat.append(0)
-            else:
-                self.other_cat.append(1)
-        self.other_cat = np.array(self.other_cat)
-
-        other_cat_tf = tf.one_hot(self.other_cat, depth=self.num_categories, dtype=np.int64)
-        # prediction
-        test_pred = self.inference(other_features_tf)
-        true = tf.argmax(other_cat_tf, 1)
-        guessed = tf.argmax(test_pred, 1)
-        correct_prediction = tf.equal(guessed, true)
-
-        with tf.Session() as sess:
-            saver = tf.train.Saver()
-            ckpt = tf.train.get_checkpoint_state(join(self.model_path, 'train', 'run%d' % validation_run))
-            if ckpt and ckpt.model_checkpoint_path:
-                relative_model_path_idx = ckpt.model_checkpoint_path.index('models/')
-                relative_model_path = join(data_dir, 'classification',
-                                           ckpt.model_checkpoint_path[relative_model_path_idx:])
-                saver.restore(sess, relative_model_path)
-                global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
-            else:
-                print('No checkpoint file found')
-                return
-
-
-            accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-
-            self.other_acc, self.other_guess = sess.run([accuracy, guessed], feed_dict={self.keep_prob: 1.0})
-            print("Validation accuracy=", "{:.9f}".format(self.acc))
-
-        print('\n\nAverage validation accuracy: ', self.acc, ' on BBP')
-        print('\nAverage ', self.model_type, ' accuracy: ', self.other_acc)
-
-        tf.reset_default_graph()
-
 
 
     def return_features(self, spikes):
@@ -327,100 +362,6 @@ class Prediction:
         return y_conv
 
 
-    def evaluate(self, validation_run=None):
-        ''' evaluate the network
-        '''
-        if validation_run is not None:
-            curr_eval_dir = join(self.val_data_dir, 'eval_' + str(validation_run))
-        else:
-            curr_eval_dir = self.val_data_dir
-            validation_run = 0
-        checkpoint_path = join(self.model_path, 'train', 'run%d' % validation_run, self.model_name + '.ckpt')
-
-        # get data for testing
-        if self.classification == 'binary':
-            test_spikes, test_features, test_loc, test_rot, test_cat, test_mcat = load_validation_data(curr_eval_dir,
-                                                                                                       load_mcat=True)
-        else:
-            test_spikes, test_features, test_loc, test_rot, test_cat = load_validation_data(curr_eval_dir)
-        test_features_tf = tf.constant(test_features, dtype=np.float32)
-        test_cat_tf = tf.one_hot(test_cat, depth=self.num_categories, dtype=np.int64)
-        # prediction
-        test_pred = self.inference(test_features_tf)
-        true = tf.argmax(test_cat_tf, 1)
-        guessed = tf.argmax(test_pred, 1)
-        correct_prediction = tf.equal(guessed, true)
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-        tf.summary.scalar('accuracy', accuracy)
-
-        saver = tf.train.Saver()
-
-        # cost:  Optimize L2 norm
-        test_cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=test_pred,
-                                                                                    labels=test_cat_tf))
-        tf.summary.scalar('cross_entropy', test_cross_entropy)
-
-        # Merge all the summaries
-        merged_sum = tf.summary.merge_all()
-
-        eval_writer = tf.summary.FileWriter(join(self.model_path, 'eval', 'run%d' % validation_run))
-
-        with tf.Session() as sess:
-            ckpt = tf.train.get_checkpoint_state(join(self.model_path, 'train', 'run%d' % validation_run))
-            if ckpt and ckpt.model_checkpoint_path:
-                relative_model_path_idx = ckpt.model_checkpoint_path.index('models/')
-                relative_model_path = join(data_dir, 'classification',
-                                           ckpt.model_checkpoint_path[relative_model_path_idx:])
-                saver.restore(sess, relative_model_path)
-                global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
-            else:
-                print('No checkpoint file found')
-                return
-
-            # Start the queue runners.
-            coord = tf.train.Coordinator()
-            try:
-                threads = []
-                for qr in tf.get_collection(tf.GraphKeys.QUEUE_RUNNERS):
-                    threads.extend(qr.create_threads(sess, coord=coord, daemon=True,
-                                                     start=True))
-
-                acc, guess, summary = sess.run([accuracy, guessed, merged_sum], feed_dict={self.keep_prob: 1.0})
-                print("Validation accuracy=", "{:.9f}".format(acc))
-
-                self.accuracies.append(acc)
-                self.guessed.append(guess)
-                self.loc.append(test_loc)
-                self.spikes.append(test_spikes)
-                if self.classification == 'binary':
-                    self.cat.append(test_mcat)
-                else:
-                    self.cat.append(test_cat)
-                self.rot.append(test_rot)
-
-                eval_writer.add_summary(summary, global_step)
-            except Exception as e:  # pylint: disable=broad-except
-                coord.request_stop(e)
-            finally:
-                # When done, ask the threads to stop.
-                coord.request_stop()
-                # And wait for them to actually do it.
-                coord.join(threads)
-
-        tf.reset_default_graph()
-
-
-    def get_binary_cat(self, categories):
-        binary_cat = []
-        for i, cat in enumerate(categories):
-            if cat in self.exc_categories:
-                binary_cat.append('EXCIT')
-            elif cat in self.inh_categories:
-                binary_cat.append('INHIB')
-
-        return np.array(binary_cat, dtype=str)
-
-
 if __name__ == '__main__':
     '''
         COMMAND-LINE 
@@ -434,6 +375,8 @@ if __name__ == '__main__':
     if '-val' in sys.argv:
         pos = sys.argv.index('-val')
         spikes = sys.argv[pos + 1]
+    else:
+        spikes = None
     if len(sys.argv) == 1:
         print('Arguments: \n   -mod CNN model path\n   ' \
               '-val validation data path')
